@@ -28,7 +28,7 @@ TARGET = arm_tiny
 
 # Compiler flags
 CFLAGS = -Wall -I$(INCLUDE_DIR) -c -lc -g -O0 -fno-pie -fno-builtin-printf -mgeneral-regs-only
-LDFLAGS = -T link.lds -static
+LDFLAGS = -T link.lds
 
 # Build rules
 all: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(TARGET).bin
