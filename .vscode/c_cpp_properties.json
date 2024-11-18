@@ -1,0 +1,15 @@
+{
+    "configurations": [
+      {
+        "name": "ARM_TINY",
+        "includePath": [
+          "include"
+        ],
+        "defines": [
+          "-c99"
+        ],
+        "compilerPath": "/home/debin/.software/toolchains/aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-gcc"
+      }
+    ],
+    "version": 4
+  }
