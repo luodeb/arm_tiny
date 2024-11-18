@@ -32,21 +32,21 @@ void handle_sync_exception(uint64_t *stack_pointer)
 
     int ec = ((el1_esr >> 26) & 0b111111);
 
-    tiny_printf("el1 esr: %d\n", el1_esr);
-    tiny_printf("ec: %x\n", ec);
+    tiny_printf(INFO, "el1 esr: %d\n", el1_esr);
+    tiny_printf(INFO, "ec: %x\n", ec);
 
-    tiny_printf("This is handle_sync_exception: \n");
+    tiny_printf(INFO, "This is handle_sync_exception: \n");
     for (int i = 0; i < 31; i++)
     {
         uint64_t value = el1_ctx->r[i];
-        tiny_printf("General-purpose register: %d, value: %x\n", i, value);
+        tiny_printf(INFO, "General-purpose register: %d, value: %x\n", i, value);
     }
 
     uint64_t elr_el1_value = el1_ctx->elr;
     uint64_t usp_value = el1_ctx->usp;
     uint64_t spsr_value = el1_ctx->spsr;
 
-    tiny_printf("usp: %x, elr: %x, spsr: %x\n", usp_value, elr_el1_value, spsr_value);
+    tiny_printf(INFO, "usp: %x, elr: %x, spsr: %x\n", usp_value, elr_el1_value, spsr_value);
 
     while(1) ;
 }
@@ -80,7 +80,7 @@ void invalid_exception(uint64_t *stack_pointer, uint64_t kind, uint64_t source)
 void cntp_handler(uint64_t *)
 {
     asm volatile("msr CNTP_TVAL_EL0, %0" : : "r"(50000000));
-    tiny_printf("irq %d\n", TIMER);
+    tiny_printf(INFO, "irq %d\n", TIMER);
 }
 
 int interrupt_init(void)

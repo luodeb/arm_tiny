@@ -10,10 +10,10 @@ struct gic_t _gicv2;
 
 void gic_test_init(void)
 {
-    tiny_printf("[guest]     gicd enable %s\n", read32((void *)GICD_CTLR) ? "ok" : "error");
-    tiny_printf("[guest]     gicc enable %s\n", read32((void *)GICC_CTLR) ? "ok" : "error");
-    tiny_printf("[guest]     irq numbers: %d\n", _gicv2.irq_nr);
-    tiny_printf("[guest]     cpu num: %d\n", cpu_num());
+    tiny_printf(INFO, "[guest]     gicd enable %s\n", read32((void *)GICD_CTLR) ? "ok" : "error");
+    tiny_printf(INFO, "[guest]     gicc enable %s\n", read32((void *)GICC_CTLR) ? "ok" : "error");
+    tiny_printf(INFO, "[guest]     irq numbers: %d\n", _gicv2.irq_nr);
+    tiny_printf(INFO, "[guest]     cpu num: %d\n", cpu_num());
 }
 
 // gicd g0, g1  gicc enable
@@ -82,7 +82,7 @@ void gic_enable_int(int vector, int pri)
 {
     int reg = vector >> 5;                     //  vec / 32
     int mask = 1 << (vector & ((1 << 5) - 1)); //  vec % 32
-    tiny_printf("[guest] set enable: reg: %d, mask: 0x%x\n", reg, mask);
+    tiny_printf(INFO, "[guest] set enable: reg: %d, mask: 0x%x\n", reg, mask);
 
     write32(mask, (void *)(uint64_t)GICD_ISENABLER(reg));
 
@@ -96,7 +96,7 @@ void gic_disable_int(int vector, int pri)
 {
     int reg = vector >> 5;                     //  vec / 32
     int mask = 1 << (vector & ((1 << 5) - 1)); //  vec % 32
-    tiny_printf("[guest] disable: reg: %d, mask: 0x%x\n", reg, mask);
+    tiny_printf(INFO, "[guest] disable: reg: %d, mask: 0x%x\n", reg, mask);
 
     write32(mask, (void *)(uint64_t)GICD_ICENABLER(reg));
 }
@@ -109,7 +109,7 @@ int gic_get_enable(int vector)
 
     uint32_t val = read32((void *)(uint64_t)GICD_ISENABLER(reg));
 
-    tiny_printf("[guest] get enable: reg: %x, mask: %x, value: %x\n", reg, mask, val);
+    tiny_printf(INFO, "[guest] get enable: reg: %x, mask: %x, value: %x\n", reg, mask, val);
     return val & (mask != 0);
 }
 

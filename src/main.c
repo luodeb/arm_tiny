@@ -28,12 +28,13 @@ static int count = 0;
 void timer_handler(uint64_t *)
 {
     asm volatile("msr CNTP_TVAL_EL0, %0" : : "r"(50000000));
-    tiny_printf("irq %d, count %d\n", TIMER, count++);
+    tiny_printf(INFO, "irq %d, count %d\n", TIMER, count++);
 }
+
 
 int kernel_main(void)
 {
-    tiny_hello();
+    tiny_printf(INFO, "\nHello, ARM Tiny%d!\n",123);
 
     // tiny_io_init();
     irq_handle_register(TIMER, timer_handler);

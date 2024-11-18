@@ -4,6 +4,16 @@
 #include "tiny_types.h"
 #include <stdarg.h>
 
+// 配置打印日志
+#define TINY_DEBUG
+typedef enum 
+{
+    NONE,
+    INFO,
+    WARN,
+    DEBUG
+}LOG_LEVEL;
+
 static inline uint8_t read8(const volatile void *addr) {
     return *(const volatile uint8_t *)addr;
 }
@@ -38,9 +48,6 @@ static inline void write64(uint64_t value, volatile void *addr) {
 }
 
 void tiny_io_init();
-void tiny_printf(const char *format, ...);
-void info(const char *info);
-void warn(const char *info);
-void debug(const char *info);
+void tiny_printf(LOG_LEVEL level, const char *format, ...);
 void tiny_hello(void);
 #endif // __IO_H__

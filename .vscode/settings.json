@@ -4,6 +4,7 @@
         "stdarg.h": "c",
         "stdio.h": "c",
         "stdlib.h": "c",
-        "tiny_types.h": "c"
+        "tiny_types.h": "c",
+        "cstdarg": "c"
     }
 }
