@@ -19,7 +19,7 @@
 
 irq_handler_t g_handler_vec[512] = {0};
 
-void irq_handle_register(int vector, void (*h)(uint64_t *))
+void irq_handle_register(int vector, void (*h)(uint64_t *,uint64_t))
 {
     g_handler_vec[vector] = h;
 }
@@ -61,7 +61,7 @@ void handle_irq_exception(uint64_t *stack_pointer)
     int iar = gic_read_iar();
     int vector = gic_iar_irqnr(iar);
 
-    g_handler_vec[vector]((uint64_t *)el1_ctx); // arg not use
+    g_handler_vec[vector]((uint64_t *)el1_ctx,vector); // arg not use
 
     gic_write_eoir(iar);
     gic_write_dir(iar);
@@ -77,7 +77,7 @@ void invalid_exception(uint64_t *stack_pointer, uint64_t kind, uint64_t source)
 }
 
 
-void cntp_handler(uint64_t *)
+void cntp_handler(uint64_t *,uint64_t irq)
 {
     asm volatile("msr CNTP_TVAL_EL0, %0" : : "r"(50000000));
     tiny_printf(INFO, "irq %d\n", TIMER);

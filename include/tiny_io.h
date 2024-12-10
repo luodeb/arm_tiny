@@ -50,4 +50,5 @@ static inline void write64(uint64_t value, volatile void *addr) {
 void tiny_io_init();
 void tiny_printf(LOG_LEVEL level, const char *format, ...);
 void tiny_hello(void);
+void soft_delay_ms(int n);
 #endif // __IO_H__

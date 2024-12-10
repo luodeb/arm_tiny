@@ -10,6 +10,7 @@
 #include "tiny_io.h"
 #include <spin_lock.h>
 #include <config.h>
+#include "stdio.h"
 
 spinlock_t lock;
 
@@ -196,4 +197,20 @@ void tiny_printf(LOG_LEVEL level, const char *format, ...)
 void tiny_hello(void)
 {
     tiny_printf(INFO, "Hello, ARM Tiny!\n");
+}
+
+void soft_delay(int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        asm volatile("nop");
+    }
+}
+
+void soft_delay_ms(int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        soft_delay(1000000);
+    }
 }
