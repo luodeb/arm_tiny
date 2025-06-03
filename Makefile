@@ -27,7 +27,7 @@ OBJECTS = $(C_OBJECTS) $(ASM_OBJECTS)
 TARGET = arm_tiny
 
 # Compiler flags
-CFLAGS = -Wall -I$(INCLUDE_DIR) -c -lc -g -O0 -fno-pie -fno-builtin-printf -mgeneral-regs-only
+CFLAGS = -Wall -I$(INCLUDE_DIR) -c -lc -g -O0 -fno-pie -fno-builtin-printf -mgeneral-regs-only -DVM_VERSION=\"$(if $(VM_VERSION),$(VM_VERSION),"null")\"
 LDFLAGS = -T link.lds
 
 # Build rules
@@ -56,6 +56,9 @@ debug:
 
 run:
 	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf
+
+mutil_uart:
+	/home/debin/Tools/qemu-9.1.2/aarch64/bin/qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -serial mon:stdio -serial telnet:localhost:4321,server -serial telnet:localhost:4322,server -serial telnet:localhost:4323,server
 
 clean:
 	rm -rf $(OUTPUT_DIR)

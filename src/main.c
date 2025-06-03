@@ -8,7 +8,13 @@
 #include "tiny_io.h"
 #include "handle.h"
 #include "gicv2.h"
-int timer_interval = 500000000;
+#include "virtio.h"
+
+#ifndef VM_VERSION
+#define VM_VERSION "null"
+#endif
+
+int timer_interval = 60000000;
 
 void timer_gic_init(void)
 {
@@ -29,23 +35,18 @@ static int count = 0;
 void timer_handler(uint64_t *)
 {
     asm volatile("msr CNTP_TVAL_EL0, %0" : : "r"(timer_interval));
-    tiny_printf(INFO, "irq %d, count %d\n", TIMER, count++);
+    tiny_printf(INFO, "irq %d, count %d\n\n", TIMER, count++);
 }
 
 int kernel_main(void)
 {
-    tiny_printf(INFO, "\nHello, ARM Tiny%d!\n", 123);
+    tiny_printf(INFO, "\nHello, ARM Tiny VM%s!\n", VM_VERSION);
 
-    // tiny_io_init();
     irq_handle_register(TIMER, timer_handler);
-    // handle_init();
-    // gic_init();
-    timer_gic_init();
-    // enable_interrupts();
     asm volatile("msr daifclr, #2" : : : "memory");
     asm volatile("msr CNTP_TVAL_EL0, %0" : : "r"(timer_interval));
     asm volatile("msr CNTP_CTL_EL0, %0" : : "r"(1));
-
+    tiny_printf(INFO, "read block success\n");
     while (1)
     {
     }

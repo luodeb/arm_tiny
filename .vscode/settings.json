@@ -9,6 +9,7 @@
         "handle.h": "c",
         "spin_lock.h": "c",
         "config.h": "c",
-        "tiny_io.h": "c"
+        "tiny_io.h": "c",
+        "virtio.h": "c"
     }
 }
