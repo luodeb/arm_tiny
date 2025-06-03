@@ -46,7 +46,7 @@ int kernel_main(void)
     asm volatile("msr daifclr, #2" : : : "memory");
     asm volatile("msr CNTP_TVAL_EL0, %0" : : "r"(timer_interval));
     asm volatile("msr CNTP_CTL_EL0, %0" : : "r"(1));
-    tiny_printf(INFO, "read block success\n");
+    tiny_printf(INFO, "interrupt success\n");
     while (1)
     {
     }
