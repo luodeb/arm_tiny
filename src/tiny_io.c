@@ -45,7 +45,7 @@ void print_str(const char *str)
     }
 }
 
-void print_int(uint32_t num)
+void print_int(int num)
 {
     char str[32];
     int i = 0;
@@ -53,7 +53,7 @@ void print_int(uint32_t num)
     if (num < 0)
     {
         print_char('-');
-        i = 1;
+        num = -num;
     }
     for (j = 0; j < 32; j++)
     {

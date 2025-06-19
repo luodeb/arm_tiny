@@ -8,7 +8,6 @@
 #include "tiny_io.h"
 #include "handle.h"
 #include "gicv2.h"
-#include "virtio.h"
 
 #ifndef VM_VERSION
 #define VM_VERSION "null"
@@ -42,11 +41,6 @@ int kernel_main(void)
 {
     tiny_printf(INFO, "\nHello, ARM Tiny VM%s!\n", VM_VERSION);
 
-    irq_handle_register(TIMER, timer_handler);
-    asm volatile("msr daifclr, #2" : : : "memory");
-    asm volatile("msr CNTP_TVAL_EL0, %0" : : "r"(timer_interval));
-    asm volatile("msr CNTP_CTL_EL0, %0" : : "r"(1));
-    tiny_printf(INFO, "interrupt success\n");
     while (1)
     {
     }
