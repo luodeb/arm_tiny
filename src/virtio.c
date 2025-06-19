@@ -1,98 +1,208 @@
-#include "tiny_types.h"
+/*
+ * virtio.c - 简化的 VirtIO 设备驱动核心实现
+ */
+
+#include "virtio.h"
+#include "config.h"
 #include "tiny_io.h"
-// #include <stdint.h>
+#include "tiny_types.h"
 
-#define PHYS_ADDR(x) ((uint32_t)((uintptr_t)(x) & 0xFFFFFFFF))
+// 全局设备数组
+static struct virtio_device g_virtio_devices[VIRTIO_MAX_DEVICES];
+static uint32_t g_num_devices = 0;
 
-#define VIRTIO_MMIO_BASE 0x0A000000 // 假设你的virtio-mmio设备映射在这个地址
-#define VIRTQ_SIZE 8
-
-// Virtio MMIO寄存器偏移量
-#define REG_MAGIC 0x00
-#define REG_VERSION 0x04
-#define REG_DEVICE_ID 0x08
-#define REG_DRIVER_FEATURES 0x10
-#define REG_STATUS 0x70
-
-// Virtio设备状态
-#define STATUS_ACKNOWLEDGE 1
-#define STATUS_DRIVER 2
-#define STATUS_DRIVER_OK 4
-
-// 描述符 flags
-#define VIRTQ_DESC_F_NEXT 1
-#define VIRTQ_DESC_F_WRITE 2
-
-struct virtq_desc
+// MMIO 寄存器访问函数
+static uint32_t virtio_mmio_read32(struct virtio_device *vdev, uint32_t offset)
 {
-    uint64_t addr;
-    uint32_t len;
-    uint16_t flags;
-    uint16_t next;
-};
-
-struct virtq
-{
-    struct virtq_desc desc[VIRTQ_SIZE];
-    uint16_t avail_idx;
-    // 其他队列字段简化处理...
-};
-
-static volatile uint32_t *reg = (uint32_t *)VIRTIO_MMIO_BASE;
-static struct virtq *virtq;
-
-void virtio_init()
-{
-    // 检查magic值
-    if (reg[REG_MAGIC / 4] != 0x74726976)
-    { // 'virt'
-        tiny_printf(INFO, "Invalid magic\n");
-        return;
-    }
-
-    // 重置设备
-    reg[REG_STATUS / 4] = 0;
-    reg[REG_STATUS / 4] = STATUS_ACKNOWLEDGE;
-    reg[REG_STATUS / 4] |= STATUS_DRIVER;
-
-    // 初始化virtqueue
-    virtq = (struct virtq *)0x1000;  // 队列内存位置需要根据实际情况调整
-    // reg[0x34 / 4] = (uint32_t)virtq; // QueuePFN寄存器设置物理地址
-    reg[0x34/4] = PHYS_ADDR(virtq);
-
-    // 设备激活
-    reg[REG_STATUS / 4] |= STATUS_DRIVER_OK;
+    volatile uint32_t *reg = (volatile uint32_t *)(vdev->base_addr + offset);
+    return *reg;
 }
 
-void test_read_block()
+static void virtio_mmio_write32(struct virtio_device *vdev, uint32_t offset, uint32_t value)
 {
-    // 创建描述符链
-    uint8_t buffer[512] __attribute__((aligned(4)));
-    virtq->desc[0].addr = (uint64_t)buffer;
-    virtq->desc[0].len = sizeof(buffer);
-    virtq->desc[0].flags = VIRTQ_DESC_F_WRITE;
-    virtq->desc[0].next = 0;
+    volatile uint32_t *reg = (volatile uint32_t *)(vdev->base_addr + offset);
+    *reg = value;
+}
 
-    // 构造请求头（符合virtio-blk规范）
-    struct virtio_blk_req
+// 公共寄存器访问函数
+uint32_t virtio_read_reg32(struct virtio_device *vdev, uint32_t offset)
+{
+    return virtio_mmio_read32(vdev, offset);
+}
+
+void virtio_write_reg32(struct virtio_device *vdev, uint32_t offset, uint32_t value)
+{
+    virtio_mmio_write32(vdev, offset, value);
+}
+
+// 设备探测函数
+static int virtio_probe_device(uint32_t base_addr)
+{
+    volatile uint32_t *reg = (volatile uint32_t *)base_addr;
+
+    // 检查魔数
+    uint32_t magic = reg[VIRTIO_MMIO_MAGIC / 4];
+    if (magic != VIRTIO_MMIO_MAGIC_VALUE)
     {
-        uint32_t type;
-        uint32_t reserved;
-        uint64_t sector;
-    } req = {0, 0, 0};
+        return VIRTIO_ERROR_INVALID_DEVICE;
+    }
 
-    virtq->desc[1].addr = (uint64_t)&req;
-    virtq->desc[1].len = sizeof(req);
-    virtq->desc[1].flags = 0;
-    virtq->desc[1].next = 0;
+    // 检查版本
+    uint32_t version = reg[VIRTIO_MMIO_VERSION / 4];
+    if (version != 1)
+    {
+        tiny_printf(WARN, "virtio: unsupported version %d at 0x%x\n", version, base_addr);
+        return VIRTIO_ERROR_INVALID_DEVICE;
+    }
 
-    // 提交请求
-    virtq->avail_idx = 1; // 简化处理，实际需要操作avail ring
+    // 读取设备ID
+    uint32_t device_id = reg[VIRTIO_MMIO_DEVICE_ID / 4];
+    if (device_id == 0)
+    {
+        // 没有设备
+        return VIRTIO_ERROR_NO_DEVICE;
+    }
 
-    // 通知设备
-    reg[0x30 / 4] = 0; // QueueNotify
+    // 读取厂商ID
+    uint32_t vendor_id = reg[VIRTIO_MMIO_VENDOR_ID / 4];
 
-    // 等待完成（这里应该检查used ring，简化处理）
-    for (volatile int i = 0; i < 1000000; i++)
-        ;
+    tiny_printf(DEBUG, "virtio: found device id=%d vendor=0x%x at 0x%x\n",
+                device_id, vendor_id, base_addr);
+
+    // 添加到设备列表
+    if (g_num_devices >= VIRTIO_MAX_DEVICES)
+    {
+        tiny_printf(WARN, "virtio: too many devices, ignoring device at 0x%x\n", base_addr);
+        return VIRTIO_ERROR_NO_MEMORY;
+    }
+
+    struct virtio_device *vdev = &g_virtio_devices[g_num_devices];
+    vdev->base_addr = base_addr;
+    vdev->device_id = device_id;
+    vdev->vendor_id = vendor_id;
+    vdev->status = 0;
+
+    g_num_devices++;
+
+    return VIRTIO_OK;
+}
+
+// 设备初始化
+int virtio_init_device(struct virtio_device *vdev, virtio_device_init_func init_func)
+{
+    if (!vdev || !init_func)
+    {
+        return VIRTIO_ERROR_INVALID_DEVICE;
+    }
+
+    tiny_printf(INFO, "virtio: initializing device id=%d\n", vdev->device_id);
+
+    // 重置设备
+    vdev->status = 0;
+    virtio_mmio_write32(vdev, VIRTIO_MMIO_STATUS, 0);
+
+    // 设置 ACKNOWLEDGE 状态
+    vdev->status |= VIRTIO_STATUS_ACKNOWLEDGE;
+    virtio_mmio_write32(vdev, VIRTIO_MMIO_STATUS, vdev->status);
+
+    // 设置 DRIVER 状态
+    vdev->status |= VIRTIO_STATUS_DRIVER;
+    virtio_mmio_write32(vdev, VIRTIO_MMIO_STATUS, vdev->status);
+
+    // 读取设备特性
+    uint32_t device_features = virtio_mmio_read32(vdev, VIRTIO_MMIO_DEVICE_FEATURES);
+    uint32_t driver_features = device_features; // 简化：接受所有特性
+
+    tiny_printf(DEBUG, "virtio: device features: 0x%x, driver features: 0x%x\n",
+                device_features, driver_features);
+
+    // 写入驱动特性
+    virtio_mmio_write32(vdev, VIRTIO_MMIO_DRIVER_FEATURES, driver_features);
+
+    // 设置 FEATURES_OK 状态
+    vdev->status |= VIRTIO_STATUS_FEATURES_OK;
+    virtio_mmio_write32(vdev, VIRTIO_MMIO_STATUS, vdev->status);
+
+    // 验证 FEATURES_OK
+    uint32_t status = virtio_mmio_read32(vdev, VIRTIO_MMIO_STATUS);
+    if (!(status & VIRTIO_STATUS_FEATURES_OK))
+    {
+        tiny_printf(WARN, "virtio: device rejected features\n");
+        vdev->status |= VIRTIO_STATUS_FAILED;
+        virtio_mmio_write32(vdev, VIRTIO_MMIO_STATUS, vdev->status);
+        return VIRTIO_ERROR_INVALID_DEVICE;
+    }
+
+    // 调用设备特定的初始化函数
+    int ret = init_func(vdev);
+    if (ret != VIRTIO_OK)
+    {
+        tiny_printf(WARN, "virtio: device init failed\n");
+        vdev->status |= VIRTIO_STATUS_FAILED;
+        virtio_mmio_write32(vdev, VIRTIO_MMIO_STATUS, vdev->status);
+        return ret;
+    }
+
+    // 设置 DRIVER_OK 状态
+    vdev->status |= VIRTIO_STATUS_DRIVER_OK;
+    virtio_mmio_write32(vdev, VIRTIO_MMIO_STATUS, vdev->status);
+
+    tiny_printf(INFO, "virtio: device id=%d initialized successfully\n", vdev->device_id);
+    return VIRTIO_OK;
+}
+
+// 查找设备
+struct virtio_device *virtio_find_device(uint32_t device_id)
+{
+    for (uint32_t i = 0; i < g_num_devices; i++)
+    {
+        if (g_virtio_devices[i].device_id == device_id)
+        {
+            return &g_virtio_devices[i];
+        }
+    }
+    return NULL;
+}
+
+// 初始化 VirtIO 子系统
+int virtio_init(void)
+{
+    tiny_printf(INFO, "virtio: initializing subsystem\n");
+
+    g_num_devices = 0;
+
+    // 探测设备
+    for (uint32_t addr = VIRTIO_MMIO_BASE; addr < VIRTIO_MMIO_BASE + VIRTIO_MMIO_SIZE; addr += VIRTIO_MMIO_STRIDE)
+    {
+        tiny_printf(DEBUG, "virtio: probing device at 0x%x: magic=0x%x (expected 0x%x)\n",
+                    addr, *(volatile uint32_t *)addr, VIRTIO_MMIO_MAGIC_VALUE);
+
+        if (*(volatile uint32_t *)addr == VIRTIO_MMIO_MAGIC_VALUE)
+        {
+            uint32_t device_id = *(volatile uint32_t *)(addr + VIRTIO_MMIO_DEVICE_ID);
+            tiny_printf(DEBUG, "virtio: device_id at 0x%x = %d\n", addr, device_id);
+
+            if (device_id != 0)
+            {
+                virtio_probe_device(addr);
+            }
+        }
+    }
+
+    tiny_printf(INFO, "virtio: found %d devices\n", g_num_devices);
+    return VIRTIO_OK;
+}
+
+// 测试函数
+void virtio_test(void)
+{
+    tiny_printf(INFO, "virtio: running basic test\n");
+
+    // 列出所有发现的设备
+    for (uint32_t i = 0; i < g_num_devices; i++)
+    {
+        struct virtio_device *vdev = &g_virtio_devices[i];
+        tiny_printf(INFO, "  device %d: id=%d vendor=%d base=0x%x\n",
+                    i, vdev->device_id, vdev->vendor_id, vdev->base_addr);
+    }
 }

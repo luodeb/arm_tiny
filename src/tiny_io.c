@@ -45,7 +45,7 @@ void print_str(const char *str)
     }
 }
 
-void print_int(uint32_t num)
+void print_int(int num)
 {
     char str[32];
     int i = 0;
@@ -54,6 +54,7 @@ void print_int(uint32_t num)
     {
         print_char('-');
         i = 1;
+        num = -num;
     }
     for (j = 0; j < 32; j++)
     {
@@ -137,6 +138,9 @@ void tiny_printf(LOG_LEVEL level, const char *format, ...)
     case DEBUG:
         print_str("\033[34m");
         break;
+    case ERROR:
+        print_str("\033[31m");
+        break;
 
     default:
         break;
@@ -165,6 +169,12 @@ void tiny_printf(LOG_LEVEL level, const char *format, ...)
             case 'x':
                 print_hex(va_arg(args, uint32_t));
                 break;
+            case 'p':
+                print_hex((uint32_t)va_arg(args, void *));
+                break;
+            case '%':
+                print_char('%');
+                break;
             default:
                 break;
             }
@@ -184,6 +194,9 @@ void tiny_printf(LOG_LEVEL level, const char *format, ...)
         print_str("\033[0m");
         break;
     case DEBUG:
+        print_str("\033[0m");
+        break;
+    case ERROR:
         print_str("\033[0m");
         break;
 
