@@ -14,7 +14,7 @@
 // ARM virt machine VirtIO MMIO interrupt mapping
 // QEMU assigns IRQ 79 for VirtIO device in slot 31 (0xa003e00)
 // Formula: 16 (SGI) + 16 (PPI) + 32 (SPI base) + 15 (slot offset) = 79
-#define USE_VIRTIO_IRQ 1 // Enable VirtIO IRQ handling
+#define USE_VIRTIO_IRQ 0 // Enable VirtIO IRQ handling
 #define VIRTIO_IRQ_BASE 48
 #define VIRTIO_IRQ_0 79
 #endif // CONFIG_H
