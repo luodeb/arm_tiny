@@ -10,15 +10,17 @@
 #include "virtio/virtio_blk.h"
 #include "virtio/virtio_mmio.h"
 #include "tiny_io.h"
+#include "config.h"
+#include "virtio/virtio_interrupt.h"
 
 static virtio_device_t *blk_dev;
 static virtqueue_t *blk_queue;
 static virtio_blk_config_t blk_config;
 
 // Buffer for block operations - use same memory region as queues for physical address consistency
-#define VIRTIO_DATA_BASE 0x45100000  // Just after queue memory
-static uint8_t *sector_buffer = (uint8_t*)(VIRTIO_DATA_BASE);
-static virtio_blk_req_t *blk_request = (virtio_blk_req_t*)(VIRTIO_DATA_BASE + VIRTIO_BLK_SECTOR_SIZE);
+#define VIRTIO_DATA_BASE 0x45100000 // Just after queue memory
+static uint8_t *sector_buffer = (uint8_t *)(VIRTIO_DATA_BASE);
+static virtio_blk_req_t *blk_request = (virtio_blk_req_t *)(VIRTIO_DATA_BASE + VIRTIO_BLK_SECTOR_SIZE);
 
 bool virtio_blk_init(void)
 {
@@ -197,11 +199,20 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     }
 
     // Wait for completion
+#if USE_VIRTIO_IRQ
+    if (!virtio_wait_for_interrupt(VIRTIO_IRQ_TIMEOUT_MS))
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Request timeout (interrupt not received)\n");
+        return false;
+    }
+#else
+    // Polling mode - wait for completion
     if (!virtio_queue_wait_for_completion())
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Request timeout\n");
         return false;
     }
+#endif
 
     // Invalidate data buffer cache after device writes
     virtio_cache_invalidate_range((uint64_t)sector_buffer, VIRTIO_BLK_SECTOR_SIZE);

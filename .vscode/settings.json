@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.kts": "gradle",
+        "timer.h": "c",
+        "gicv2.h": "c"
+    }
+}

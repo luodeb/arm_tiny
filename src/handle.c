@@ -53,20 +53,39 @@ void handle_sync_exception(uint64_t *stack_pointer)
 
 void handle_irq_exception(uint64_t *stack_pointer)
 {
+    static uint32_t irq_count = 0;
+    irq_count++;
+
     trap_frame_t *el1_ctx = (trap_frame_t *)stack_pointer;
 
-    // uint64_t x1_value = el1_ctx->r[1];
-    // uint64_t sp_el0_value = el1_ctx->usp;
+    tiny_printf(INFO, "[IRQ_HANDLER] *** IRQ EXCEPTION #%d TRIGGERED ***\n", irq_count);
+    tiny_printf(INFO, "[IRQ_HANDLER] Stack pointer: 0x%x\n", (uint64_t)stack_pointer);
 
+    // Read IAR and extract vector
     int iar = gic_read_iar();
     int vector = gic_iar_irqnr(iar);
 
-    g_handler_vec[vector]((uint64_t *)el1_ctx); // arg not use
+    tiny_printf(INFO, "[IRQ_HANDLER] GIC IAR: 0x%x, Vector: %d\n", iar, vector);
 
+    // Check if handler exists
+    if (g_handler_vec[vector] == 0)
+    {
+        tiny_printf(ERROR, "[IRQ_HANDLER] ERROR: No handler for IRQ %d!\n", vector);
+    }
+    else
+    {
+        tiny_printf(INFO, "[IRQ_HANDLER] Calling handler for IRQ %d\n", vector);
+        g_handler_vec[vector]((uint64_t *)el1_ctx);
+        tiny_printf(INFO, "[IRQ_HANDLER] Handler for IRQ %d completed\n", vector);
+    }
+
+    // Complete interrupt handling
+    tiny_printf(DEBUG, "[IRQ_HANDLER] Writing EOIR: 0x%x\n", iar);
     gic_write_eoir(iar);
     gic_write_dir(iar);
-}
 
+    tiny_printf(INFO, "[IRQ_HANDLER] IRQ exception handling completed\n");
+}
 void invalid_exception(uint64_t *stack_pointer, uint64_t kind, uint64_t source)
 {
     // trap_frame_t *el1_ctx = (trap_frame_t *)stack_pointer;

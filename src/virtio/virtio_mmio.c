@@ -233,8 +233,8 @@ bool virtio_queue_init(virtio_device_t *dev, uint32_t queue_idx)
     uint64_t base_addr = 0x45000000; // 4KB-aligned base address
 
     // Legacy mode layout (all components in one contiguous region)
-    uint64_t desc_addr = base_addr;               // Descriptor table (16-byte aligned)
-    uint64_t avail_addr = desc_addr + desc_size;  // Available ring follows descriptors
+    uint64_t desc_addr = base_addr;              // Descriptor table (16-byte aligned)
+    uint64_t avail_addr = desc_addr + desc_size; // Available ring follows descriptors
     uint64_t used_addr = (avail_addr + used_size + 4096 - 1) & ~(4096 - 1);
 
     // Verify total size fits in reasonable bounds (should be < 4KB for small queues)
@@ -375,9 +375,13 @@ bool virtio_queue_init(virtio_device_t *dev, uint32_t queue_idx)
 
     // CRITICAL: Set VIRTQ_AVAIL_F_NO_INTERRUPT flag to enable polling mode
     // This tells the device NOT to use interrupts and allows pure polling
-    virtio_queue.avail->flags = VIRTQ_AVAIL_F_NO_INTERRUPT;
-    tiny_printf(INFO, "[VIRTIO] Set avail->flags = VIRTQ_AVAIL_F_NO_INTERRUPT (0x%x) for polling mode\n",
-                VIRTQ_AVAIL_F_NO_INTERRUPT);
+#if USE_VIRTIO_IRQ
+    virtio_queue.avail->flags &= ~VIRTQ_AVAIL_F_NO_INTERRUPT; // Clear any previous flags
+#else
+    virtio_queue.avail->flags |= VIRTQ_AVAIL_F_NO_INTERRUPT;
+#endif
+    tiny_printf(INFO, "[VIRTIO] Set avail->flags = 0x%x for polling mode\n",
+                virtio_queue.avail->flags);
 
     // Ensure the flag setting is visible to the device
     virtio_cache_clean_range((uint64_t)virtio_queue.avail, sizeof(virtq_avail_t));
@@ -446,8 +450,13 @@ bool virtio_queue_submit_request(uint16_t desc_head)
     uint16_t avail_idx = virtio_queue.avail->idx;
     virtio_queue.avail->ring[avail_idx % virtio_queue.queue_size] = desc_head;
 
-    // CRITICAL: Ensure NO_INTERRUPT flag is set for polling mode
-    virtio_queue.avail->flags = VIRTQ_AVAIL_F_NO_INTERRUPT;
+#if USE_VIRTIO_IRQ
+    virtio_queue.avail->flags &= ~VIRTQ_AVAIL_F_NO_INTERRUPT; // Clear any previous flags
+#else
+    virtio_queue.avail->flags |= VIRTQ_AVAIL_F_NO_INTERRUPT;
+#endif
+    tiny_printf(INFO, "[VIRTIO] Set avail->flags = 0x%x for polling mode\n",
+                virtio_queue.avail->flags);
 
     // Memory barrier - critical for ARM architecture
     __asm__ volatile("dmb sy" ::: "memory");

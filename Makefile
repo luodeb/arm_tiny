@@ -62,15 +62,6 @@ run:
 virtio_test:
 	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -device virtio-blk-device,drive=test -drive file=test.img,if=none,id=test,format=raw,cache=none
 
-virtio_test_pci:
-	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -device virtio-blk-pci,drive=test,disable-legacy=on,disable-modern=off -drive file=test.img,if=none,id=test,format=raw,cache=none
-
-virtio_test_modern:
-	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -device virtio-blk-device,drive=test,disable-legacy=on,disable-modern=off -drive file=test.img,if=none,id=test,format=raw,cache=none
-
-virtio_test_pci_debug:
-	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -device virtio-blk-pci,drive=test -drive file=test.img,if=none,id=test,format=raw,cache=none -monitor stdio
-
 mutil_uart:
 	/home/debin/Tools/qemu-9.1.2/aarch64/bin/qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -serial mon:stdio -serial telnet:localhost:4321,server -serial telnet:localhost:4322,server -serial telnet:localhost:4323,server
 

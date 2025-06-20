@@ -6,9 +6,12 @@
  */
 
 #include "tiny_io.h"
+#include "gicv2.h"
+#include "timer.h"
 #include "virtio/virtio_blk.h"
 #include "virtio/fat32.h"
 #include "virtio/virtio_debug.h"
+#include "virtio/virtio_interrupt.h"
 
 #ifndef VM_VERSION
 #define VM_VERSION "null"
@@ -17,8 +20,37 @@
 int kernel_main(void)
 {
     tiny_printf(INFO, "\nHello, ARM Tiny VM%s!\n", VM_VERSION);
-    tiny_printf(INFO, "Starting VirtIO Debug Tests...\n");
 
+#if USE_VIRTIO_IRQ
+    // Initialize GIC
+    tiny_printf(INFO, "=== Initializing GIC ===\n");
+    gic_init();
+
+    // Initialize Timer
+    tiny_printf(INFO, "=== Initializing Timer ===\n");
+    timer_init();
+
+    // Test Timer interrupts
+    tiny_printf(INFO, "=== Testing Timer Interrupts ===\n");
+    if (!timer_test_simple())
+    {
+        tiny_printf(WARN, "Timer interrupt test FAILED\n");
+        goto error_exit;
+    }
+    tiny_printf(INFO, "Timer interrupt test PASSED\n");
+    // Initialize VirtIO Interrupts
+    tiny_printf(INFO, "=== Initializing VirtIO Interrupts ===\n");
+    if (!virtio_interrupt_init())
+    {
+        tiny_printf(WARN, "VirtIO interrupt initialization FAILED\n");
+        goto error_exit;
+    }
+    tiny_printf(INFO, "VirtIO interrupt initialization SUCCESSFUL\n");
+#else
+    tiny_printf(INFO, "VirtIO interrupts are disabled (USE_VIRTIO_IRQ=0)\n");
+#endif
+
+    tiny_printf(INFO, "Starting VirtIO Debug Tests...\n");
     // Test 1: Basic hang point isolation
     tiny_printf(INFO, "=== Testing Hang Points ===\n");
     if (!virtio_test_hang_points())
