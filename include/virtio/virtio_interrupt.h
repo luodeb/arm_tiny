@@ -45,6 +45,8 @@ bool virtio_interrupt_init(void);
  */
 void virtio_irq_handler(uint64_t *ctx);
 
+void virtio_ready_interrupts(void);
+
 /**
  * Wait for VirtIO interrupt with timeout
  * - Replaces polling-based wait mechanism

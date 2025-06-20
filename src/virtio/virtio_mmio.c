@@ -8,7 +8,9 @@
  */
 
 #include "virtio/virtio_mmio.h"
+#include "virtio/virtio_interrupt.h"
 #include "tiny_io.h"
+#include "config.h"
 
 // ARM cache management functions for DMA coherency
 void virtio_cache_clean_range(uint64_t start, uint32_t size)
@@ -476,6 +478,10 @@ bool virtio_queue_submit_request(uint16_t desc_head)
 
     tiny_printf(DEBUG, "[VIRTIO] Submitted request: desc_head=%d, avail_idx=%d\n",
                 desc_head, avail_idx);
+
+#if USE_VIRTIO_IRQ
+    virtio_reset_interrupt_state();
+#endif
 
     // Notify device - queue index should be passed
     virtio_write32(virtio_dev.base_addr + VIRTIO_MMIO_QUEUE_NOTIFY, 0); // Queue 0

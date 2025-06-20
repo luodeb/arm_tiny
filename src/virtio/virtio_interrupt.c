@@ -65,6 +65,12 @@ bool virtio_interrupt_init(void)
     return true;
 }
 
+void virtio_ready_interrupts(void)
+{
+    virtio_irq_state.interrupt_received = false;
+    tiny_printf(INFO, "[VIRTIO_IRQ] VirtIO interrupts are ready\n");
+}
+
 void virtio_irq_handler(uint64_t *ctx)
 {
     // Increment interrupt counter first
@@ -123,9 +129,6 @@ void virtio_irq_handler(uint64_t *ctx)
 bool virtio_wait_for_interrupt(uint32_t timeout_ms)
 {
     tiny_printf(INFO, "[VIRTIO_WAIT] Starting interrupt-based wait (timeout: %d ms)\n", timeout_ms);
-
-    // Clear interrupt received flag before waiting
-    virtio_irq_state.interrupt_received = false;
 
     // Calculate timeout in loop iterations (approximate)
     uint32_t timeout_loops = timeout_ms * 1000; // Approximate 1000 loops per ms

@@ -60,7 +60,10 @@ run:
 	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf
 
 virtio_test:
-	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -device virtio-blk-device,drive=test -drive file=test.img,if=none,id=test,format=raw,cache=none
+	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 \
+	-nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf \
+	-device virtio-blk-device,drive=test \
+	-drive file=test.img,if=none,id=test,format=raw,cache=none
 
 mutil_uart:
 	/home/debin/Tools/qemu-9.1.2/aarch64/bin/qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -serial mon:stdio -serial telnet:localhost:4321,server -serial telnet:localhost:4322,server -serial telnet:localhost:4323,server

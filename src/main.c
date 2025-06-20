@@ -12,6 +12,7 @@
 #include "virtio/fat32.h"
 #include "virtio/virtio_debug.h"
 #include "virtio/virtio_interrupt.h"
+#include "config.h"
 
 #ifndef VM_VERSION
 #define VM_VERSION "null"
@@ -19,6 +20,7 @@
 
 int kernel_main(void)
 {
+    tiny_io_init();
     tiny_printf(INFO, "\nHello, ARM Tiny VM%s!\n", VM_VERSION);
 
 #if USE_VIRTIO_IRQ
