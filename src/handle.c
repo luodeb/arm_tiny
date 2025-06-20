@@ -76,29 +76,3 @@ void invalid_exception(uint64_t *stack_pointer, uint64_t kind, uint64_t source)
         ;
 }
 
-
-void cntp_handler(uint64_t *)
-{
-    asm volatile("msr CNTP_TVAL_EL0, %0" : : "r"(50000000));
-    tiny_printf(INFO, "irq %d\n", TIMER);
-}
-
-int interrupt_init(void)
-{
-    unsigned long value, cur_el;
-     /*如果当前处于EL2级别，需要设置HCR_EL2寄存器，将IRQ路由到EL2*/
-    asm volatile("mrs %0, CurrentEL" : "=r" (cur_el));
-    if(cur_el == 0x8) {
-	    asm volatile("mrs %0, HCR_EL2" : "=r" (value));
-        value |= (1<<4);
-	    asm volatile("msr HCR_EL2, %0" : : "r" (value));   
-    }
-    
-	return 0;
-}
-
-void handle_init()
-{
-    // interrupt_init();
-    irq_handle_register(TIMER, cntp_handler);
-}

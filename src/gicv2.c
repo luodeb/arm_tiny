@@ -88,7 +88,21 @@ void gic_enable_int(int vector, int pri)
 
     int n = vector >> 2;
     int m = vector & ((1 << 2) - 1);
-    write32((pri << 3) | (1 << 7), (void *)(uint64_t)(GICD_IPRIORITYR(n) + m));
+
+    // a. 计算目标 32 位寄存器的地址
+    volatile uint32_t *reg_addr = (volatile uint32_t *)((uint64_t)GICD_IPRIORITYR(n));
+    // b. 读取当前寄存器的值
+    uint32_t reg_val = read32(reg_addr);
+    // c. 计算要清除的旧值的掩码
+    uint32_t new_mask = 0xFF << (m * 8);
+    // d. 计算新值
+    uint32_t new_val = (pri << 3) | (1 << 7);
+    // e. 将新值移位到正确位置
+    new_val <<= (m * 8);
+    // f. 清除旧值并设置新值
+    reg_val = (reg_val & ~new_mask) | new_val;
+    // g. 将最终结果写回寄存器
+    write32(reg_val, reg_addr);
 }
 
 // disables the given interrupt.

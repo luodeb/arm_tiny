@@ -6,8 +6,6 @@
 #define CNTP_TIMER   30
 #define CNTV_TIMER   27
 
-#define TIMER  CNTP_TIMER
-
 #define GICD_BASE_ADDR  0x8000000
 #define GICC_BASE_ADDR  0x8010000
 

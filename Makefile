@@ -15,10 +15,10 @@ ASM_DIR = asm
 OUTPUT_DIR = build
 
 # Source files
-C_SOURCES = $(wildcard $(SRC_DIR)/*.c)
+C_SOURCES = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/virtio/*.c)
 ASM_SOURCES = $(wildcard $(ASM_DIR)/*.S)
 
-# Object files
+# Object files  
 C_OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OUTPUT_DIR)/%.o, $(C_SOURCES))
 ASM_OBJECTS = $(patsubst $(ASM_DIR)/%.S, $(OUTPUT_DIR)/%.o, $(ASM_SOURCES))
 OBJECTS = $(C_OBJECTS) $(ASM_OBJECTS)
@@ -35,6 +35,7 @@ all: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(TARGET).bin
 
 $(OUTPUT_DIR):
 	mkdir -p $(OUTPUT_DIR)
+	mkdir -p $(OUTPUT_DIR)/virtio
 
 $(OUTPUT_DIR)/$(TARGET).bin: $(OUTPUT_DIR)/$(TARGET).elf
 	$(OBJCOPY) -O binary $< $@
@@ -43,6 +44,7 @@ $(OUTPUT_DIR)/$(TARGET).bin: $(OUTPUT_DIR)/$(TARGET).elf
 
 
 $(OUTPUT_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $<
 
 $(OUTPUT_DIR)/%.o: $(ASM_DIR)/%.S
@@ -56,6 +58,18 @@ debug:
 
 run:
 	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf
+
+virtio_test:
+	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -device virtio-blk-device,drive=test -drive file=test.img,if=none,id=test,format=raw,cache=none
+
+virtio_test_pci:
+	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -device virtio-blk-pci,drive=test,disable-legacy=on,disable-modern=off -drive file=test.img,if=none,id=test,format=raw,cache=none
+
+virtio_test_modern:
+	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -device virtio-blk-device,drive=test,disable-legacy=on,disable-modern=off -drive file=test.img,if=none,id=test,format=raw,cache=none
+
+virtio_test_pci_debug:
+	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -device virtio-blk-pci,drive=test -drive file=test.img,if=none,id=test,format=raw,cache=none -monitor stdio
 
 mutil_uart:
 	/home/debin/Tools/qemu-9.1.2/aarch64/bin/qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -serial mon:stdio -serial telnet:localhost:4321,server -serial telnet:localhost:4322,server -serial telnet:localhost:4323,server

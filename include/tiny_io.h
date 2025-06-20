@@ -6,13 +6,14 @@
 
 // 配置打印日志
 #define TINY_DEBUG
-typedef enum 
+typedef enum
 {
     NONE,
     INFO,
     WARN,
-    DEBUG
-}LOG_LEVEL;
+    DEBUG,
+    ERROR,
+} LOG_LEVEL;
 
 static inline uint8_t read8(const volatile void *addr) {
     return *(const volatile uint8_t *)addr;
@@ -51,4 +52,32 @@ void tiny_io_init();
 void tiny_printf(LOG_LEVEL level, const char *format, ...);
 void tiny_hello(void);
 void soft_delay_ms(int n);
+
+// PSCI function IDs for system shutdown
+#define PSCI_SYSTEM_OFF 0x84000008
+
+// ARM64 system shutdown function using PSCI
+static inline void system_shutdown(void)
+{
+    tiny_printf(INFO, "Shutting down system...\n");
+
+    // PSCI call to shutdown the system
+    __asm__ volatile(
+        "mov x0, %0\n\t"
+        "hvc #0\n\t"
+        :
+        : "r"(PSCI_SYSTEM_OFF)
+        : "x0");
+
+    // If PSCI fails, try alternative method
+    // Some QEMU versions support writing to this address for shutdown
+    write32(0x2000, (volatile void *)0x84000008);
+
+    // Final fallback - infinite loop
+    while (1)
+    {
+        __asm__ volatile("wfi"); // Wait for interrupt
+    }
+}
+
 #endif // __IO_H__
