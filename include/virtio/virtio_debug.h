@@ -10,7 +10,6 @@
 #include "virtio_mmio.h"
 
 // Debug functions
-bool virtio_queue_wait_simple(void);
 bool virtio_test_basic_access(void);
 bool virtio_test_hang_points(void);
 
