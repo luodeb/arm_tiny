@@ -6,13 +6,14 @@
 
 // 配置打印日志
 #define TINY_DEBUG
-typedef enum 
+typedef enum
 {
     NONE,
     INFO,
     WARN,
-    DEBUG
-}LOG_LEVEL;
+    DEBUG,
+    ERROR
+} LOG_LEVEL;
 
 static inline uint8_t read8(const volatile void *addr) {
     return *(const volatile uint8_t *)addr;
