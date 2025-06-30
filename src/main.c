@@ -15,8 +15,6 @@ int kernel_main(void)
 {
     tiny_printf(INFO, "\nHello, ARM Tiny VM [%s]!\n", VM_VERSION);
 
-    while (1)
-    {
-    }
+    system_shutdown();
     return 0;
 }

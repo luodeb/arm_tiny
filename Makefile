@@ -57,8 +57,6 @@ debug:
 run:
 	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf
 
-mutil_uart:
-	/home/debin/Tools/qemu-9.1.2/aarch64/bin/qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -serial mon:stdio -serial telnet:localhost:4321,server -serial telnet:localhost:4322,server -serial telnet:localhost:4323,server
 
 clean:
 	rm -rf $(OUTPUT_DIR)
