@@ -68,6 +68,7 @@ typedef struct
 // Function declarations
 bool virtio_blk_init(void);
 bool virtio_blk_read_sector(uint32_t sector, void *buffer);
+bool virtio_blk_write_sector(uint32_t sector, const void *buffer);
 uint64_t virtio_blk_get_capacity(void);
 bool virtio_blk_test(void);
 

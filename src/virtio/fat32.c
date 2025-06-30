@@ -212,6 +212,33 @@ bool fat32_read_cluster(uint32_t cluster, void *buffer)
     return true;
 }
 
+bool fat32_write_cluster(uint32_t cluster, const void *buffer)
+{
+    if (cluster < 2 || cluster >= FAT32_EOC)
+    {
+        tiny_printf(WARN, "[FAT32] Invalid cluster number: %d\n", cluster);
+        return false;
+    }
+
+    // Calculate cluster's first sector
+    uint32_t first_sector = fat32_fs.data_start_sector + ((cluster - 2) * fat32_fs.sectors_per_cluster);
+
+    tiny_printf(DEBUG, "[FAT32] Writing cluster %d (sector %d)\n", cluster, first_sector);
+
+    // Write all sectors in the cluster
+    for (uint32_t i = 0; i < fat32_fs.sectors_per_cluster; i++)
+    {
+        const uint8_t *buf_offset = (const uint8_t *)buffer + (i * fat32_fs.bytes_per_sector);
+        if (!virtio_blk_write_sector(first_sector + i, buf_offset))
+        {
+            tiny_printf(WARN, "[FAT32] Failed to write sector %d of cluster %d\n", first_sector + i, cluster);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool fat32_find_file_in_dir(uint32_t dir_cluster, const char *filename, fat32_dir_entry_t *entry)
 {
     char target_name[11];
@@ -259,6 +286,7 @@ bool fat32_find_file_in_dir(uint32_t dir_cluster, const char *filename, fat32_di
             }
 
             // Compare filename
+            tiny_printf(DEBUG, "[FAT32] Comparing '%s' with '%s'\n", dir_entry->name, target_name);
             if (fat32_compare_filename((char *)dir_entry->name, target_name, 11))
             {
                 tiny_printf(INFO, "[FAT32] File found: '%s', size=%d, first_cluster=%d\n",
@@ -349,5 +377,252 @@ bool fat32_read_file(const char *filename, char *buffer, uint32_t max_size)
     }
 
     tiny_printf(INFO, "[FAT32] File read SUCCESSFUL - %d bytes\n", bytes_read);
+    return true;
+}
+
+uint32_t fat32_allocate_cluster(void)
+{
+    tiny_printf(DEBUG, "[FAT32] Allocating new cluster\n");
+
+    // Simple allocation: start from cluster 2 and find first free cluster
+    // In a real implementation, you'd use the FSInfo sector to track free clusters
+    for (uint32_t cluster = 2; cluster < 0x0FFFFFF0; cluster++)
+    {
+        uint32_t next_cluster = fat32_get_next_cluster(cluster);
+        if (next_cluster == FAT32_FREE_CLUSTER)
+        {
+            tiny_printf(DEBUG, "[FAT32] Found free cluster: %d\n", cluster);
+            return cluster;
+        }
+    }
+
+    tiny_printf(WARN, "[FAT32] No free clusters available\n");
+    return FAT32_EOC;
+}
+
+bool fat32_set_fat_entry(uint32_t cluster, uint32_t value)
+{
+    // Calculate FAT entry location
+    uint32_t fat_offset = cluster * 4; // 4 bytes per FAT32 entry
+    uint32_t fat_sector = fat32_fs.fat_start_sector + (fat_offset / fat32_fs.bytes_per_sector);
+    uint32_t entry_offset = fat_offset % fat32_fs.bytes_per_sector;
+
+    tiny_printf(DEBUG, "[FAT32] Setting FAT entry for cluster %d to 0x%x: FAT sector=%d, offset=%d\n",
+                cluster, value, fat_sector, entry_offset);
+
+    // Read FAT sector
+    if (!virtio_blk_read_sector(fat_sector, sector_buf))
+    {
+        tiny_printf(WARN, "[FAT32] Failed to read FAT sector %d\n", fat_sector);
+        return false;
+    }
+
+    // Update FAT entry (preserve upper 4 bits)
+    uint32_t *fat_entry = (uint32_t *)(sector_buf + entry_offset);
+    uint32_t old_value = *fat_entry;
+    *fat_entry = (old_value & 0xF0000000) | (value & 0x0FFFFFFF);
+
+    tiny_printf(DEBUG, "[FAT32] Updated FAT entry: 0x%x -> 0x%x\n", old_value, *fat_entry);
+
+    // Write FAT sector back
+    if (!virtio_blk_write_sector(fat_sector, sector_buf))
+    {
+        tiny_printf(WARN, "[FAT32] Failed to write FAT sector %d\n", fat_sector);
+        return false;
+    }
+
+    // Update backup FAT if it exists
+    if (fat32_fs.boot_sector.num_fats > 1)
+    {
+        uint32_t backup_fat_sector = fat_sector + read_unaligned_u32(&fat32_fs.boot_sector.fat_size_32);
+        if (!virtio_blk_write_sector(backup_fat_sector, sector_buf))
+        {
+            tiny_printf(WARN, "[FAT32] Failed to write backup FAT sector %d\n", backup_fat_sector);
+            // Continue anyway - backup FAT is not critical
+        }
+    }
+
+    return true;
+}
+
+bool fat32_create_dir_entry(uint32_t dir_cluster, const char *filename, uint32_t first_cluster, uint32_t file_size)
+{
+    char target_name[11];
+    fat32_format_filename(filename, target_name);
+
+    tiny_printf(DEBUG, "[FAT32] Creating directory entry for '%s' (formatted as '%s') in cluster %d\n",
+                filename, target_name, dir_cluster);
+
+    uint32_t current_cluster = dir_cluster;
+
+    while (current_cluster < FAT32_EOC)
+    {
+        // Read cluster
+        if (!fat32_read_cluster(current_cluster, cluster_buf))
+        {
+            tiny_printf(WARN, "[FAT32] Failed to read directory cluster %d\n", current_cluster);
+            return false;
+        }
+
+        // Scan directory entries to find empty slot
+        uint32_t entries_per_cluster = (fat32_fs.sectors_per_cluster * fat32_fs.bytes_per_sector) / sizeof(fat32_dir_entry_t);
+        fat32_dir_entry_t *dir_entries = (fat32_dir_entry_t *)cluster_buf;
+
+        for (uint32_t i = 0; i < entries_per_cluster; i++)
+        {
+            fat32_dir_entry_t *dir_entry = &dir_entries[i];
+
+            // Found empty slot (deleted entry or end of directory)
+            if (dir_entry->name[0] == 0x00 || dir_entry->name[0] == 0xE5)
+            {
+                tiny_printf(DEBUG, "[FAT32] Found empty slot at entry %d\n", i);
+
+                // Clear the entry
+                for (int j = 0; j < sizeof(fat32_dir_entry_t); j++)
+                {
+                    ((uint8_t *)dir_entry)[j] = 0;
+                }
+
+                // Set filename
+                for (int j = 0; j < 11; j++)
+                {
+                    dir_entry->name[j] = target_name[j];
+                }
+
+                // Set attributes
+                dir_entry->attr = FAT_ATTR_ARCHIVE;
+
+                // Set cluster and size
+                write_unaligned_u16(&dir_entry->first_cluster_low, first_cluster & 0xFFFF);
+                write_unaligned_u16(&dir_entry->first_cluster_high, (first_cluster >> 16) & 0xFFFF);
+                write_unaligned_u32(&dir_entry->file_size, file_size);
+
+                // Set timestamps (simplified - use current time)
+                // For now, just set to some fixed values
+                write_unaligned_u16(&dir_entry->create_time, 0x0000);
+                write_unaligned_u16(&dir_entry->create_date, 0x0000);
+                write_unaligned_u16(&dir_entry->write_time, 0x0000);
+                write_unaligned_u16(&dir_entry->write_date, 0x0000);
+                write_unaligned_u16(&dir_entry->last_access_date, 0x0000);
+
+                tiny_printf(DEBUG, "[FAT32] Directory entry created - cluster=%d, size=%d\n", first_cluster, file_size);
+
+                // Write cluster back
+                if (!fat32_write_cluster(current_cluster, cluster_buf))
+                {
+                    tiny_printf(WARN, "[FAT32] Failed to write directory cluster %d\n", current_cluster);
+                    return false;
+                }
+
+                tiny_printf(INFO, "[FAT32] Directory entry created successfully\n");
+                return true;
+            }
+        }
+
+        // Get next cluster in directory chain
+        current_cluster = fat32_get_next_cluster(current_cluster);
+    }
+
+    tiny_printf(WARN, "[FAT32] No empty directory entry slots found\n");
+    return false;
+}
+
+bool fat32_write_file(const char *filename, const char *data, uint32_t size)
+{
+    tiny_printf(INFO, "[FAT32] Writing file '%s' (%d bytes)\n", filename, size);
+
+    if (!fat32_fs.initialized)
+    {
+        tiny_printf(WARN, "[FAT32] File system not initialized\n");
+        return false;
+    }
+
+    // Check if file already exists
+    fat32_dir_entry_t existing_entry;
+    if (fat32_find_file_in_dir(fat32_fs.root_dir_cluster, filename, &existing_entry))
+    {
+        tiny_printf(WARN, "[FAT32] File '%s' already exists - overwriting not implemented\n", filename);
+        return false;
+    }
+
+    // Calculate number of clusters needed
+    uint32_t cluster_size = fat32_fs.sectors_per_cluster * fat32_fs.bytes_per_sector;
+    uint32_t clusters_needed = (size + cluster_size - 1) / cluster_size;
+    if (clusters_needed == 0)
+        clusters_needed = 1; // At least one cluster
+
+    tiny_printf(DEBUG, "[FAT32] Need %d clusters for %d bytes (cluster size: %d)\n",
+                clusters_needed, size, cluster_size);
+
+    // Allocate clusters
+    uint32_t first_cluster = fat32_allocate_cluster();
+    if (first_cluster >= FAT32_EOC)
+    {
+        tiny_printf(WARN, "[FAT32] Failed to allocate first cluster\n");
+        return false;
+    }
+
+    uint32_t current_cluster = first_cluster;
+    uint32_t bytes_written = 0;
+
+    // Write data to clusters
+    for (uint32_t i = 0; i < clusters_needed; i++)
+    {
+        // Clear cluster buffer
+        for (uint32_t j = 0; j < cluster_size; j++)
+        {
+            cluster_buf[j] = 0;
+        }
+
+        // Copy data to cluster buffer
+        uint32_t bytes_to_copy = (size - bytes_written < cluster_size) ? (size - bytes_written) : cluster_size;
+        for (uint32_t j = 0; j < bytes_to_copy; j++)
+        {
+            cluster_buf[j] = data[bytes_written + j];
+        }
+
+        tiny_printf(DEBUG, "[FAT32] Writing cluster %d (%d bytes)\n", current_cluster, bytes_to_copy);
+
+        // Write cluster
+        if (!fat32_write_cluster(current_cluster, cluster_buf))
+        {
+            tiny_printf(WARN, "[FAT32] Failed to write cluster %d\n", current_cluster);
+            return false;
+        }
+
+        bytes_written += bytes_to_copy;
+
+        // Mark cluster as used in FAT
+        uint32_t next_cluster_value = FAT32_EOC; // End of chain by default
+
+        // If we need more clusters, allocate next one
+        if (i < clusters_needed - 1)
+        {
+            uint32_t next_cluster = fat32_allocate_cluster();
+            if (next_cluster >= FAT32_EOC)
+            {
+                tiny_printf(WARN, "[FAT32] Failed to allocate cluster %d\n", i + 1);
+                return false;
+            }
+            next_cluster_value = next_cluster;
+            current_cluster = next_cluster;
+        }
+
+        // Update FAT entry
+        if (!fat32_set_fat_entry(current_cluster, next_cluster_value))
+        {
+            tiny_printf(WARN, "[FAT32] Failed to update FAT entry for cluster %d\n", current_cluster);
+            return false;
+        }
+    }
+
+    // Create directory entry
+    if (!fat32_create_dir_entry(fat32_fs.root_dir_cluster, filename, first_cluster, size))
+    {
+        tiny_printf(WARN, "[FAT32] Failed to create directory entry\n");
+        return false;
+    }
+
+    tiny_printf(INFO, "[FAT32] File '%s' written successfully (%d bytes)\n", filename, size);
     return true;
 }

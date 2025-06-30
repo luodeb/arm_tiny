@@ -81,9 +81,14 @@ typedef struct
 // Function declarations
 bool fat32_init(void);
 bool fat32_read_file(const char *filename, char *buffer, uint32_t max_size);
+bool fat32_write_file(const char *filename, const char *data, uint32_t size);
 bool fat32_parse_boot_sector(void);
 uint32_t fat32_get_next_cluster(uint32_t cluster);
 bool fat32_read_cluster(uint32_t cluster, void *buffer);
+bool fat32_write_cluster(uint32_t cluster, const void *buffer);
 bool fat32_find_file_in_dir(uint32_t dir_cluster, const char *filename, fat32_dir_entry_t *entry);
+uint32_t fat32_allocate_cluster(void);
+bool fat32_set_fat_entry(uint32_t cluster, uint32_t value);
+bool fat32_create_dir_entry(uint32_t dir_cluster, const char *filename, uint32_t first_cluster, uint32_t file_size);
 
 #endif // __FAT32_H__

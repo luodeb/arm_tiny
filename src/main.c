@@ -18,6 +18,17 @@
 #define VM_VERSION "null"
 #endif
 
+// Simple strlen implementation for bare metal environment
+static uint32_t my_strlen(const char *str)
+{
+    uint32_t len = 0;
+    while (str[len] != '\0')
+    {
+        len++;
+    }
+    return len;
+}
+
 int kernel_main(void)
 {
     tiny_io_init();
@@ -106,17 +117,29 @@ int kernel_main(void)
     }
     tiny_printf(INFO, "FAT32 file system initialized successfully\n");
 
-    // Test 7: File Reading Test
+    // Test 7: File Writing Test
+    // tiny_printf(INFO, "=== Testing File Writing ===\n");
+    // const char *test_data = "Hello, this is a test file created by the FAT32 implementation!\nThis file contains multiple lines.\nLine 3 of the test file.";
+    // if (!fat32_write_file("test.txt", test_data, my_strlen(test_data)))
+    // {
+    //     tiny_printf(WARN, "Failed to write test.txt file\n");
+    // }
+    // else
+    // {
+    //     tiny_printf(INFO, "Successfully wrote test.txt file\n");
+    // }
+
+    // Test 8: File Reading Test
     tiny_printf(INFO, "=== Testing File Reading ===\n");
-    char file_content[256];
-    if (!fat32_read_file("hello.txt", file_content, 255))
+    char file_content[512];
+    if (!fat32_read_file("test.txt", file_content, 511))
     {
-        tiny_printf(WARN, "Failed to read hello.txt file\n");
+        tiny_printf(WARN, "Failed to read test.txt file\n");
     }
     else
     {
-        file_content[255] = '\0'; // Ensure null termination
-        tiny_printf(INFO, "Successfully read hello.txt file\n");
+        file_content[511] = '\0'; // Ensure null termination
+        tiny_printf(INFO, "Successfully read test.txt file\n");
         tiny_printf(INFO, "File content: %s\n", file_content);
     }
 

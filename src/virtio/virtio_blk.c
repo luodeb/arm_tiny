@@ -209,7 +209,7 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     // Polling mode - wait for completion
     if (!virtio_queue_wait_for_completion())
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Request timeout\n");
+        tiny_printf(ERROR, "[VIRTIO_BLK] Request timeout\n");
         return false;
     }
 #endif
@@ -234,6 +234,120 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     }
 
     tiny_printf(INFO, "[VIRTIO_BLK] Sector %d read SUCCESSFUL\n", sector);
+    return true;
+}
+
+bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
+{
+    tiny_printf(DEBUG, "[VIRTIO_BLK] Writing sector %d\n", sector);
+
+    if (!blk_dev || !blk_queue)
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Device not initialized\n");
+        return false;
+    }
+
+    // Check device status before operation
+    uint32_t device_status = virtio_read32(blk_dev->base_addr + VIRTIO_MMIO_STATUS);
+    tiny_printf(DEBUG, "[VIRTIO_BLK] Device status before operation: 0x%x\n", device_status);
+
+    if (!(device_status & VIRTIO_STATUS_DRIVER_OK))
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Device not ready! Status: 0x%x\n", device_status);
+        return false;
+    }
+
+    // Clear request structure completely
+    for (int i = 0; i < sizeof(virtio_blk_req_t); i++)
+    {
+        ((uint8_t *)blk_request)[i] = 0;
+    }
+
+    tiny_printf(DEBUG, "[VIRTIO_BLK] Request structure cleared\n");
+
+    // Copy input data to sector buffer
+    for (int i = 0; i < VIRTIO_BLK_SECTOR_SIZE; i++)
+    {
+        sector_buffer[i] = ((const uint8_t *)buffer)[i];
+    }
+
+    tiny_printf(DEBUG, "[VIRTIO_BLK] Data copied to sector buffer\n");
+
+    // Setup request header - set values before writing
+    blk_request->header.type = VIRTIO_BLK_T_OUT; // Write operation
+    blk_request->header.reserved = 0;
+    blk_request->header.sector = sector;
+    blk_request->status = 0xFF; // Set to non-zero to detect completion
+
+    tiny_printf(DEBUG, "[VIRTIO_BLK] Request header configured - Type: %d, Sector: %d, Status: 0x%x\n",
+                blk_request->header.type, (uint32_t)blk_request->header.sector, blk_request->status);
+
+    // Clean data buffer cache before device reads
+    virtio_cache_clean_range((uint64_t)sector_buffer, VIRTIO_BLK_SECTOR_SIZE);
+    virtio_cache_clean_range((uint64_t)&blk_request->header, sizeof(virtio_blk_req_header_t));
+
+    // Setup descriptors
+    // Descriptor 0: Request header (device read)
+    if (!virtio_queue_add_descriptor(0, (uint64_t)&blk_request->header,
+                                     sizeof(virtio_blk_req_header_t), VIRTQ_DESC_F_NEXT, 1))
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Failed to add header descriptor\n");
+        return false;
+    }
+
+    // Descriptor 1: Data buffer (device read for write operation)
+    if (!virtio_queue_add_descriptor(1, (uint64_t)sector_buffer,
+                                     VIRTIO_BLK_SECTOR_SIZE, VIRTQ_DESC_F_NEXT, 2))
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Failed to add data descriptor\n");
+        return false;
+    }
+
+    // Descriptor 2: Status byte (device write)
+    if (!virtio_queue_add_descriptor(2, (uint64_t)&blk_request->status,
+                                     1, VIRTQ_DESC_F_WRITE, 0))
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Failed to add status descriptor\n");
+        return false;
+    }
+
+    tiny_printf(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
+
+    // Submit request
+    if (!virtio_queue_submit_request(0))
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Failed to submit request\n");
+        return false;
+    }
+
+    // Wait for completion
+#if USE_VIRTIO_IRQ
+    if (!virtio_wait_for_interrupt(VIRTIO_IRQ_TIMEOUT_MS))
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Request timeout (interrupt not received)\n");
+        return false;
+    }
+#else
+    // Polling mode - wait for completion
+    if (!virtio_queue_wait_for_completion())
+    {
+        tiny_printf(ERROR, "[VIRTIO_BLK] Request timeout\n");
+        return false;
+    }
+#endif
+
+    // Invalidate status cache after device writes
+    virtio_cache_invalidate_range((uint64_t)&blk_request->status, sizeof(blk_request->status));
+
+    // Check status
+    if (blk_request->status != VIRTIO_BLK_S_OK)
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Write request failed with status: %d\n", blk_request->status);
+        return false;
+    }
+
+    tiny_printf(DEBUG, "[VIRTIO_BLK] Write completed successfully\n");
+    tiny_printf(INFO, "[VIRTIO_BLK] Sector %d write SUCCESSFUL\n", sector);
     return true;
 }
 

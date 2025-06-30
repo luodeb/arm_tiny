@@ -8,6 +8,7 @@
  */
 
 #include "virtio/virtio_mmio.h"
+#include "virtio/virtio_blk.h"
 #include "virtio/virtio_interrupt.h"
 #include "tiny_io.h"
 #include "config.h"
@@ -56,6 +57,30 @@ void virtio_cache_invalidate_range(uint64_t start, uint32_t size)
 static virtio_device_t virtio_dev;
 static virtqueue_t virtio_queue;
 
+// Helper function to display VirtIO features
+static void virtio_display_features(uint64_t features, const char *prefix)
+{
+    tiny_printf(INFO, "[VIRTIO] %s features: 0x%x%08x\n", prefix,
+                (uint32_t)(features >> 32), (uint32_t)features);
+
+    if (features & (1ULL << VIRTIO_F_VERSION_1))
+    {
+        tiny_printf(DEBUG, "[VIRTIO]   - VERSION_1 (modern mode)\n");
+    }
+    if (features & (1ULL << VIRTIO_F_ACCESS_PLATFORM))
+    {
+        tiny_printf(DEBUG, "[VIRTIO]   - ACCESS_PLATFORM\n");
+    }
+    if (features & (1ULL << VIRTIO_F_RING_PACKED))
+    {
+        tiny_printf(DEBUG, "[VIRTIO]   - RING_PACKED\n");
+    }
+    if (features & (1ULL << VIRTIO_F_IN_ORDER))
+    {
+        tiny_printf(DEBUG, "[VIRTIO]   - IN_ORDER\n");
+    }
+}
+
 uint32_t virtio_read32(uint64_t addr)
 {
     uint32_t value = read32((void *)addr);
@@ -86,9 +111,9 @@ bool virtio_probe_device(uint64_t base_addr)
 
     // Read version
     uint32_t version = virtio_read32(base_addr + VIRTIO_MMIO_VERSION);
-    if (version != 1)
+    if (version < 1 || version > 2)
     {
-        tiny_printf(WARN, "[VIRTIO] Unsupported version: %d\n", version);
+        tiny_printf(WARN, "[VIRTIO] Unsupported version: %d (supported: 1-2)\n", version);
         return false;
     }
 
@@ -121,18 +146,19 @@ bool virtio_device_init(virtio_device_t *dev, uint64_t base_addr)
     // Fill device structure
     dev->base_addr = base_addr;
     dev->magic = virtio_read32(base_addr + VIRTIO_MMIO_MAGIC);
-    dev->version = virtio_read32(base_addr + VIRTIO_MMIO_VERSION);
+    uint32_t hw_version = virtio_read32(base_addr + VIRTIO_MMIO_VERSION);
     dev->device_id = virtio_read32(base_addr + VIRTIO_MMIO_DEVICE_ID);
     dev->vendor_id = virtio_read32(base_addr + VIRTIO_MMIO_VENDOR_ID);
+
+    dev->version = hw_version;
 
     tiny_printf(INFO, "[VIRTIO] Device info - Magic: 0x%x, Version: %d, Device ID: %d, Vendor ID: 0x%x\n",
                 dev->magic, dev->version, dev->device_id, dev->vendor_id);
 
-    // Note: QEMU's virtio-blk-device only supports Legacy mode (version 1)
-    // Modern mode (version 2+) is not available for virtio-blk-device
+    // VirtIO version support: Both Legacy (v1) and Modern (v2+) modes
     if (dev->version == 1)
     {
-        tiny_printf(INFO, "[VIRTIO] Device uses VirtIO 1.0 Legacy mode (expected for virtio-blk-device)\n");
+        tiny_printf(INFO, "[VIRTIO] Device uses VirtIO 1.0 Legacy mode\n");
     }
     else if (dev->version >= 2)
     {
@@ -155,13 +181,71 @@ bool virtio_device_init(virtio_device_t *dev, uint64_t base_addr)
     virtio_set_status(dev, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER);
     tiny_printf(INFO, "[VIRTIO] Driver status set\n");
 
-    // Read device features
-    uint32_t device_features = virtio_read32(dev->base_addr + VIRTIO_MMIO_DEVICE_FEATURES);
-    tiny_printf(INFO, "[VIRTIO] Device features: 0x%x\n", device_features);
+    // Read device features - handle both 32-bit and 64-bit feature negotiation
+    uint32_t device_features_low, device_features_high = 0;
+    uint64_t device_features, driver_features;
 
-    // For simplicity, accept all features
-    virtio_write32(dev->base_addr + VIRTIO_MMIO_DRIVER_FEATURES, device_features);
-    tiny_printf(INFO, "[VIRTIO] Driver features set to: 0x%x\n", device_features);
+    // Read low 32 bits
+    virtio_write32(dev->base_addr + VIRTIO_MMIO_DEVICE_FEATURES_SEL, 0);
+    device_features_low = virtio_read32(dev->base_addr + VIRTIO_MMIO_DEVICE_FEATURES);
+
+    // Read high 32 bits (for VirtIO 2.0+ features)
+    virtio_write32(dev->base_addr + VIRTIO_MMIO_DEVICE_FEATURES_SEL, 1);
+    device_features_high = virtio_read32(dev->base_addr + VIRTIO_MMIO_DEVICE_FEATURES);
+
+    device_features = ((uint64_t)device_features_high << 32) | device_features_low;
+    virtio_display_features(device_features, "Device");
+
+    // Feature negotiation based on VirtIO version
+    if (dev->version >= 2)
+    {
+        // VirtIO 2.0+ modern mode - selective feature negotiation
+
+        // Ensure VERSION_1 feature is supported for modern mode
+        if (!(device_features & (1ULL << VIRTIO_F_VERSION_1)))
+        {
+            tiny_printf(WARN, "[VIRTIO] Device doesn't support VERSION_1 feature for modern mode\n");
+            return false;
+        }
+
+        // Start with supported common features
+        driver_features = device_features & VIRTIO_SUPPORTED_FEATURES_MASK;
+
+        // Add device-specific features we want to support
+        // For block device, we can accept basic features
+        uint32_t device_specific_mask = 0;
+        if (dev->device_id == VIRTIO_DEVICE_ID_BLOCK)
+        {
+            // Accept basic block device features
+            device_specific_mask = (1 << VIRTIO_BLK_F_SIZE_MAX) |
+                                   (1 << VIRTIO_BLK_F_SEG_MAX) |
+                                   (1 << VIRTIO_BLK_F_BLK_SIZE);
+        }
+
+        driver_features |= (device_features_low & device_specific_mask);
+
+        tiny_printf(INFO, "[VIRTIO] Modern mode: VERSION_1 feature confirmed, selective negotiation\n");
+        virtio_display_features(driver_features, "Driver");
+    }
+    else
+    {
+        // VirtIO 1.0 legacy mode - accept all device features (legacy behavior)
+        driver_features = device_features_low;
+        tiny_printf(INFO, "[VIRTIO] Legacy mode: using 32-bit features only\n");
+    }
+
+    // Write driver features back
+    virtio_write32(dev->base_addr + VIRTIO_MMIO_DRIVER_FEATURES_SEL, 0);
+    virtio_write32(dev->base_addr + VIRTIO_MMIO_DRIVER_FEATURES, (uint32_t)driver_features);
+
+    if (dev->version >= 2)
+    {
+        virtio_write32(dev->base_addr + VIRTIO_MMIO_DRIVER_FEATURES_SEL, 1);
+        virtio_write32(dev->base_addr + VIRTIO_MMIO_DRIVER_FEATURES, (uint32_t)(driver_features >> 32));
+    }
+
+    tiny_printf(INFO, "[VIRTIO] Driver features set to: 0x%x%08x\n",
+                (uint32_t)(driver_features >> 32), (uint32_t)driver_features);
 
     // Indicate that feature negotiation is complete
     virtio_set_status(dev, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK);
@@ -231,13 +315,28 @@ bool virtio_queue_init(virtio_device_t *dev, uint32_t queue_idx)
     uint64_t avail_size = 6 + (queue_size * 2);             // 6 + queue_size * 2
     uint64_t used_size = 6 + (queue_size * 2);              // 6 + queue_size * 2
 
-    // Base address must be 4KB aligned for PFN calculation
+    // Memory layout depends on VirtIO version
     uint64_t base_addr = 0x45000000; // 4KB-aligned base address
+    uint64_t desc_addr, avail_addr, used_addr;
 
-    // Legacy mode layout (all components in one contiguous region)
-    uint64_t desc_addr = base_addr;              // Descriptor table (16-byte aligned)
-    uint64_t avail_addr = desc_addr + desc_size; // Available ring follows descriptors
-    uint64_t used_addr = (avail_addr + used_size + 4096 - 1) & ~(4096 - 1);
+    if (dev->version >= 2)
+    {
+        // Modern mode: Use separate, optimally aligned memory regions
+        desc_addr = base_addr;                            // Descriptor table (16-byte aligned)
+        avail_addr = (base_addr + desc_size + 15) & ~15;  // Available ring (2-byte aligned, but use 16 for safety)
+        used_addr = (avail_addr + avail_size + 15) & ~15; // Used ring (4-byte aligned, but use 16 for safety)
+
+        tiny_printf(INFO, "[VIRTIO] Modern mode layout - optimized alignment\n");
+    }
+    else
+    {
+        // Legacy mode layout (all components in one contiguous region)
+        desc_addr = base_addr;                                         // Descriptor table (16-byte aligned)
+        avail_addr = desc_addr + desc_size;                            // Available ring follows descriptors
+        used_addr = (avail_addr + used_size + 4096 - 1) & ~(4096 - 1); // Used ring 4KB aligned
+
+        tiny_printf(INFO, "[VIRTIO] Legacy mode layout - contiguous memory\n");
+    }
 
     // Verify total size fits in reasonable bounds (should be < 4KB for small queues)
     uint64_t total_size = used_addr + used_size - base_addr;
@@ -278,34 +377,60 @@ bool virtio_queue_init(virtio_device_t *dev, uint32_t queue_idx)
         // VirtIO 1.1+ modern interface
         tiny_printf(INFO, "[VIRTIO] Using VirtIO 1.1+ modern interface (queue_size=%d)\n", queue_size);
 
-        // Set queue addresses with improved layout
+        // Ensure all memory regions are properly cleaned before configuration
+        virtio_cache_clean_range(desc_addr, desc_size);
+        virtio_cache_clean_range(avail_addr, avail_size);
+        virtio_cache_clean_range(used_addr, used_size);
+
+        // Set queue addresses with 64-bit addressing support
+        tiny_printf(DEBUG, "[VIRTIO] Setting descriptor table: 0x%x%08x\n",
+                    (uint32_t)(desc_addr >> 32), (uint32_t)desc_addr);
         virtio_write32(dev->base_addr + VIRTIO_MMIO_QUEUE_DESC_LOW, (uint32_t)desc_addr);
         virtio_write32(dev->base_addr + VIRTIO_MMIO_QUEUE_DESC_HIGH, (uint32_t)(desc_addr >> 32));
 
         // Add memory barrier after descriptor table setup
         __asm__ volatile("dmb sy" ::: "memory");
 
+        tiny_printf(DEBUG, "[VIRTIO] Setting available ring: 0x%x%08x\n",
+                    (uint32_t)(avail_addr >> 32), (uint32_t)avail_addr);
         virtio_write32(dev->base_addr + VIRTIO_MMIO_QUEUE_AVAIL_LOW, (uint32_t)avail_addr);
         virtio_write32(dev->base_addr + VIRTIO_MMIO_QUEUE_AVAIL_HIGH, (uint32_t)(avail_addr >> 32));
 
+        tiny_printf(DEBUG, "[VIRTIO] Setting used ring: 0x%x%08x\n",
+                    (uint32_t)(used_addr >> 32), (uint32_t)used_addr);
         virtio_write32(dev->base_addr + VIRTIO_MMIO_QUEUE_USED_LOW, (uint32_t)used_addr);
         virtio_write32(dev->base_addr + VIRTIO_MMIO_QUEUE_USED_HIGH, (uint32_t)(used_addr >> 32));
 
         // Add memory barrier before enabling queue
         __asm__ volatile("dmb sy" ::: "memory");
+        __asm__ volatile("dsb sy" ::: "memory");
 
         // Enable the queue
+        tiny_printf(DEBUG, "[VIRTIO] Enabling queue...\n");
         virtio_write32(dev->base_addr + VIRTIO_MMIO_QUEUE_READY, 1);
 
-        // Verify queue is ready
-        uint32_t queue_ready = virtio_read32(dev->base_addr + VIRTIO_MMIO_QUEUE_READY);
+        // Verify queue is ready with timeout
+        uint32_t queue_ready;
+        int ready_timeout = 1000;
+        do
+        {
+            queue_ready = virtio_read32(dev->base_addr + VIRTIO_MMIO_QUEUE_READY);
+            if (queue_ready == 1)
+                break;
+            ready_timeout--;
+            for (volatile int i = 0; i < 100; i++)
+                ; // Small delay
+        } while (ready_timeout > 0);
+
         if (queue_ready != 1)
         {
-            tiny_printf(WARN, "[VIRTIO] Queue %d failed to become ready (ready=%d)\n", queue_idx, queue_ready);
+            tiny_printf(WARN, "[VIRTIO] Queue %d failed to become ready (ready=%d, timeout=%d)\n",
+                        queue_idx, queue_ready, ready_timeout);
             return false;
         }
 
-        tiny_printf(INFO, "[VIRTIO] Modern mode queue %d successfully activated\n", queue_idx);
+        tiny_printf(INFO, "[VIRTIO] Modern mode queue %d successfully activated (ready=%d)\n",
+                    queue_idx, queue_ready);
     }
     else
     {
@@ -576,9 +701,9 @@ uint64_t virtio_scan_devices(uint32_t target_device_id)
 
         // Read version
         uint32_t version = virtio_read32(base_addr + VIRTIO_MMIO_VERSION);
-        if (version != 1)
+        if (version < 1 || version > 2)
         {
-            tiny_printf(DEBUG, "[VIRTIO] Slot %d: Unsupported version %d\n", slot, version);
+            tiny_printf(DEBUG, "[VIRTIO] Slot %d: Unsupported version %d (supported: 1-2)\n", slot, version);
             continue;
         }
 
