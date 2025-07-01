@@ -548,7 +548,7 @@ bool virtio_queue_add_descriptor(uint16_t desc_idx, uint64_t addr, uint32_t len,
     return true;
 }
 
-bool virtio_queue_submit_request(uint16_t desc_head)
+bool virtio_queue_submit_request(uint16_t desc_head, uint32_t queue_idx)
 {
     // Cache management: Clean descriptor table and data buffers before submission
     virtio_cache_clean_range((uint64_t)virtio_queue.desc,
@@ -608,15 +608,15 @@ bool virtio_queue_submit_request(uint16_t desc_head)
     virtio_reset_interrupt_state();
 #endif
 
-    // Notify device - queue index should be passed
-    virtio_write32(virtio_dev.base_addr + VIRTIO_MMIO_QUEUE_NOTIFY, 0); // Queue 0
+    // Notify device - use the provided queue index
+    virtio_write32(virtio_dev.base_addr + VIRTIO_MMIO_QUEUE_NOTIFY, queue_idx);
 
     // CRITICAL: Add strong memory barriers after device notification
     __asm__ volatile("dmb sy" ::: "memory"); // Data memory barrier
     __asm__ volatile("dsb sy" ::: "memory"); // Data synchronization barrier
     __asm__ volatile("isb" ::: "memory");    // Instruction synchronization barrier
 
-    tiny_printf(DEBUG, "[VIRTIO] Device notified with queue index 0\n");
+    tiny_printf(DEBUG, "[VIRTIO] Device notified with queue index %d\n", queue_idx);
 
     return true;
 }

@@ -139,7 +139,7 @@ void virtio_write32(uint64_t addr, uint32_t value);
 virtio_device_t *virtio_get_device(void);
 virtqueue_t *virtio_get_queue(void);
 bool virtio_queue_add_descriptor(uint16_t desc_idx, uint64_t addr, uint32_t len, uint16_t flags, uint16_t next);
-bool virtio_queue_submit_request(uint16_t desc_head);
+bool virtio_queue_submit_request(uint16_t desc_head, uint32_t queue_idx);
 bool virtio_queue_wait_for_completion(void);
 uint64_t virtio_scan_devices(uint32_t target_device_id);
 

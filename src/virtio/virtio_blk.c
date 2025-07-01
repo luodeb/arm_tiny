@@ -192,7 +192,7 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     tiny_printf(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
 
     // Submit request
-    if (!virtio_queue_submit_request(0))
+    if (!virtio_queue_submit_request(0, 0))
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Failed to submit request\n");
         return false;
@@ -314,7 +314,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     tiny_printf(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
 
     // Submit request
-    if (!virtio_queue_submit_request(0))
+    if (!virtio_queue_submit_request(0, 0))
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Failed to submit request\n");
         return false;
