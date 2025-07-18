@@ -83,6 +83,14 @@ static void virtio_display_features(uint64_t features, const char *prefix)
 
 uint32_t virtio_read32(uint64_t addr)
 {
+    // Check for 4-byte alignment
+    if (addr & 0x3)
+    {
+        tiny_printf(ERROR, "[VIRTIO] READ32 ALIGNMENT ERROR: addr=0x%x is not 4-byte aligned!\n", (uint32_t)addr);
+        tiny_printf(ERROR, "[VIRTIO] Address must be aligned to 4-byte boundary (addr & 0x3 == 0)\n");
+        tiny_printf(ERROR, "[VIRTIO] Current alignment offset: %d bytes\n", (uint32_t)(addr & 0x3));
+    }
+
     uint32_t value = read32((void *)addr);
     tiny_printf(DEBUG, "[VIRTIO] READ32: addr=0x%x, value=0x%x\n", (uint32_t)addr, value);
     return value;
@@ -90,6 +98,14 @@ uint32_t virtio_read32(uint64_t addr)
 
 void virtio_write32(uint64_t addr, uint32_t value)
 {
+    // Check for 4-byte alignment
+    if (addr & 0x3)
+    {
+        tiny_printf(ERROR, "[VIRTIO] WRITE32 ALIGNMENT ERROR: addr=0x%x is not 4-byte aligned!\n", (uint32_t)addr);
+        tiny_printf(ERROR, "[VIRTIO] Address must be aligned to 4-byte boundary (addr & 0x3 == 0)\n");
+        tiny_printf(ERROR, "[VIRTIO] Current alignment offset: %d bytes\n", (uint32_t)(addr & 0x3));
+    }
+
     tiny_printf(DEBUG, "[VIRTIO] WRITE32: addr=0x%x, value=0x%x\n", (uint32_t)addr, value);
     write32(value, (void *)addr);
 }

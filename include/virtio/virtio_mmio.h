@@ -34,6 +34,7 @@
 #define VIRTIO_MAGIC_VALUE 0x74726976
 
 // VirtIO device IDs
+#define VIRTIO_DEVICE_ID_NET 1
 #define VIRTIO_DEVICE_ID_BLOCK 2
 
 // VirtIO 2.0 feature bits (common features)

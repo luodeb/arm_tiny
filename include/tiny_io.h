@@ -52,6 +52,7 @@ void tiny_io_init();
 void tiny_printf(LOG_LEVEL level, const char *format, ...);
 void tiny_hello(void);
 void soft_delay_ms(int n);
+void print_char(char c);
 
 // PSCI function IDs for system shutdown
 #define PSCI_SYSTEM_OFF 0x84000008
