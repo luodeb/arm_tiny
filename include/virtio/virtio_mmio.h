@@ -157,7 +157,6 @@ bool virtio_device_init(virtio_device_t *dev, uint64_t base_addr);
 void virtio_set_status(virtio_device_t *dev, uint8_t status);
 uint32_t virtio_read32(uint64_t addr);
 void virtio_write32(uint64_t addr, uint32_t value);
-virtio_device_t *virtio_get_device(void);
 uint64_t virtio_scan_devices(uint32_t target_device_id);
 
 // Multi-queue management functions
@@ -173,11 +172,10 @@ bool virtio_queue_add_descriptor(virtqueue_t *queue, uint16_t desc_idx, uint64_t
 bool virtio_queue_submit_request(virtqueue_t *queue, uint16_t desc_head);
 bool virtio_queue_wait_for_completion(virtqueue_t *queue);
 
-// Legacy compatibility functions (deprecated)
-virtqueue_t *virtio_get_queue(void); // Returns first allocated queue for backward compatibility
-
 // Cache management functions for DMA coherency
 void virtio_cache_clean_range(uint64_t start, uint32_t size);
 void virtio_cache_invalidate_range(uint64_t start, uint32_t size);
 
+virtio_device_t *virtio_get_blk_device(void);
+virtio_device_t *virtio_get_net_device(void);
 #endif // __VIRTIO_MMIO_H__

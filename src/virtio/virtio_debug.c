@@ -13,7 +13,7 @@ bool virtio_test_basic_access(void)
 {
     tiny_log(DEBUG, "[VIRTIO] Testing basic access...\n");
 
-    virtio_device_t *dev = virtio_get_device();
+    virtio_device_t *dev = virtio_get_blk_device();
     if (dev == NULL) {
         tiny_log(WARN, "[VIRTIO] Device not initialized\n");
         return false;
@@ -30,7 +30,7 @@ bool virtio_test_basic_access(void)
     tiny_log(DEBUG, "[VIRTIO] Device ID: 0x%x\n", device_id);
 
     // Test queue memory access
-    virtqueue_t *queue = virtio_get_queue();
+    virtqueue_t *queue = virtio_queue_get_device_queue(dev, 0);
     if (queue != NULL && queue->desc != NULL) {
         tiny_log(DEBUG, "[VIRTIO] Queue desc addr: 0x%p\n", queue->desc);
         tiny_log(DEBUG, "[VIRTIO] First descriptor addr: 0x%x\n", (uint32_t)queue->desc[0].addr);
@@ -71,7 +71,7 @@ bool virtio_test_hang_points(void)
     
     // Test 3: Simple register access in loop (only if device is available)
     tiny_log(DEBUG, "[VIRTIO] Test 3: Register access loop\n");
-    virtio_device_t *dev = virtio_get_device();
+    virtio_device_t *dev = virtio_get_blk_device();
     if (dev != NULL && dev->ready) {
         for (int i = 0; i < 100; i++) {
             uint32_t status = virtio_read32(dev->base_addr + VIRTIO_MMIO_STATUS);
@@ -85,7 +85,7 @@ bool virtio_test_hang_points(void)
     
     // Test 4: Queue memory access without cache ops
     tiny_log(DEBUG, "[VIRTIO] Test 4: Queue memory access\n");
-    virtqueue_t *queue = virtio_get_queue();
+    virtqueue_t *queue = virtio_queue_get_device_queue(dev, 0);
     if (queue != NULL && queue->used != NULL) {
         for (int i = 0; i < 10; i++) {
             volatile uint16_t used_idx = queue->used->idx;

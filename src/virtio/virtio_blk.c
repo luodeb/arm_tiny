@@ -22,6 +22,11 @@ static virtio_blk_config_t blk_config;
 static uint8_t *sector_buffer = (uint8_t *)(VIRTIO_DATA_BASE);
 static virtio_blk_req_t *blk_request = (virtio_blk_req_t *)(VIRTIO_DATA_BASE + VIRTIO_BLK_SECTOR_SIZE);
 
+virtio_device_t *virtio_get_blk_device(void)
+{
+    return blk_dev;
+}
+
 bool virtio_blk_init(void)
 {
     tiny_log(INFO, "[VIRTIO_BLK] Initializing VirtIO Block device\n");
@@ -49,7 +54,7 @@ bool virtio_blk_init(void)
     tiny_log(INFO, "[VIRTIO_BLK] Found VirtIO Block device at 0x%x\n", (uint32_t)blk_device_addr);
 
     // Get device from MMIO layer
-    blk_dev = virtio_get_device();
+    blk_dev = virtio_get_blk_device();
     if (!virtio_device_init(blk_dev, blk_device_addr))
     {
         tiny_log(WARN, "[VIRTIO_BLK] Device initialization FAILED\n");

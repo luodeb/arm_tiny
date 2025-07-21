@@ -80,7 +80,7 @@ void virtio_irq_handler(uint64_t *ctx)
              virtio_irq_state.interrupt_count);
 
     // Get VirtIO device for interrupt processing
-    virtio_device_t *dev = virtio_get_device();
+    virtio_device_t *dev = virtio_get_blk_device();
     if (!dev)
     {
         tiny_log(ERROR, "[VIRTIO_IRQ] ERROR: No VirtIO device available in interrupt handler\n");
@@ -181,7 +181,7 @@ bool virtio_wait_for_interrupt(uint32_t timeout_ms)
 
 uint32_t virtio_get_interrupt_status(void)
 {
-    virtio_device_t *dev = virtio_get_device();
+    virtio_device_t *dev = virtio_get_blk_device();
     if (!dev)
     {
         tiny_log(ERROR, "[VIRTIO_IRQ] ERROR: No VirtIO device for status read\n");
@@ -235,7 +235,7 @@ void virtio_print_interrupt_stats(void)
     tiny_log(INFO, "[VIRTIO_IRQ] === System State Diagnostics ===\n");
 
     // Check VirtIO device configuration
-    virtio_device_t *dev = virtio_get_device();
+    virtio_device_t *dev = virtio_get_blk_device();
     if (dev)
     {
         uint32_t device_status = virtio_read32(dev->base_addr + VIRTIO_MMIO_STATUS);
@@ -252,7 +252,7 @@ void virtio_print_interrupt_stats(void)
         }
 
         // Check queue configuration
-        virtqueue_t *queue = virtio_get_queue();
+        virtqueue_t *queue = virtio_queue_get_device_queue(dev, 0);
         if (queue && queue->avail)
         {
             tiny_log(INFO, "[VIRTIO_IRQ] Queue avail flags: 0x%x (0=interrupts enabled)\n",

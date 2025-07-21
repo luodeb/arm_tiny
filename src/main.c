@@ -33,7 +33,7 @@ static uint32_t my_strlen(const char *str)
 int kernel_main(void)
 {
     tiny_io_init();
-    tiny_log(INFO, "\nHello, ARM Tiny VM%s!\n", VM_VERSION);
+    tiny_log(INFO, "\nHello, ARM Tiny VM %s!\n", VM_VERSION);
 
 #if USE_VIRTIO_IRQ
     // Initialize GIC

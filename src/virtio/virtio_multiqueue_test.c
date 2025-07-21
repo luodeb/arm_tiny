@@ -26,8 +26,11 @@ bool virtio_test_multiqueue_allocation(void)
 
     // Create a mock device for testing
     virtio_device_t test_dev;
+    tiny_log(INFO, "[VIRTIO_TEST] === Multi-Queue Allocation Test ===\n");
     test_dev.base_addr = 0x0a000000;
+    tiny_log(INFO, "[VIRTIO_TEST] === Multi-Queue Allocation Test ===\n");
     test_dev.device_id = VIRTIO_DEVICE_ID_BLOCK;
+    tiny_log(INFO, "[VIRTIO_TEST] === Multi-Queue Allocation Test ===\n");
     test_dev.version = 2;
 
     tiny_log(INFO, "[VIRTIO_TEST] Testing queue allocation...\n");
@@ -184,27 +187,8 @@ bool virtio_test_backward_compatibility(void)
         return false;
     }
 
-    // Test legacy virtio_get_queue() function
-    virtqueue_t *legacy_queue = virtio_get_queue();
-    if (legacy_queue != queue)
-    {
-        tiny_log(ERROR, "[VIRTIO_TEST] Legacy virtio_get_queue() doesn't return first allocated queue\n");
-        return false;
-    }
-
-    tiny_log(INFO, "[VIRTIO_TEST] Legacy virtio_get_queue() works correctly\n");
-
     // Clean up
     virtio_queue_free(queue);
-
-    // Test when no queues are allocated
-    legacy_queue = virtio_get_queue();
-    if (legacy_queue != NULL)
-    {
-        tiny_log(ERROR, "[VIRTIO_TEST] Legacy virtio_get_queue() should return NULL when no queues allocated\n");
-        return false;
-    }
-
     tiny_log(INFO, "[VIRTIO_TEST] === Backward Compatibility Test PASSED ===\n");
     return true;
 }

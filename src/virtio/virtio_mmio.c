@@ -431,21 +431,6 @@ virtqueue_t *virtio_queue_get_device_queue(virtio_device_t *dev, uint32_t device
     return NULL;
 }
 
-// Legacy queue initialization function - now takes device and queue index
-bool virtio_queue_init_legacy(virtio_device_t *dev, uint32_t queue_idx)
-{
-    // Allocate a new queue for this device
-    virtqueue_t *queue = virtio_queue_alloc(dev, queue_idx);
-    if (!queue)
-    {
-        tiny_log(ERROR, "[VIRTIO] Failed to allocate queue for device queue %d\n", queue_idx);
-        return false;
-    }
-
-    // Initialize the queue
-    return virtio_queue_init(queue);
-}
-
 bool virtio_queue_init(virtqueue_t *queue)
 {
     if (!queue || !queue->device)
@@ -700,26 +685,6 @@ virtio_device_t *virtio_get_device(void)
     return &virtio_dev;
 }
 
-// Legacy compatibility function - returns first allocated queue
-virtqueue_t *virtio_get_queue(void)
-{
-    if (!queue_manager_initialized)
-    {
-        return NULL;
-    }
-
-    // Return the first allocated queue for backward compatibility
-    for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
-    {
-        if (queue_manager.queues[i].in_use)
-        {
-            return &queue_manager.queues[i];
-        }
-    }
-
-    return NULL;
-}
-
 // New queue management functions that take queue pointer
 bool virtio_queue_add_descriptor(virtqueue_t *queue, uint16_t desc_idx, uint64_t addr, uint32_t len, uint16_t flags, uint16_t next)
 {
@@ -744,18 +709,6 @@ bool virtio_queue_add_descriptor(virtqueue_t *queue, uint16_t desc_idx, uint64_t
              queue->queue_id, desc_idx, (uint32_t)addr, len, flags);
 
     return true;
-}
-
-// Legacy wrapper function for backward compatibility
-bool virtio_queue_add_descriptor_legacy(uint16_t desc_idx, uint64_t addr, uint32_t len, uint16_t flags, uint16_t next)
-{
-    virtqueue_t *queue = virtio_get_queue();
-    if (!queue)
-    {
-        tiny_log(ERROR, "[VIRTIO] No queue available for legacy operation\n");
-        return false;
-    }
-    return virtio_queue_add_descriptor(queue, desc_idx, addr, len, flags, next);
 }
 
 bool virtio_queue_submit_request(virtqueue_t *queue, uint16_t desc_head)
@@ -838,18 +791,6 @@ bool virtio_queue_submit_request(virtqueue_t *queue, uint16_t desc_head)
     return true;
 }
 
-// Legacy wrapper function for backward compatibility
-bool virtio_queue_submit_request_legacy(uint16_t desc_head, uint32_t queue_idx)
-{
-    virtqueue_t *queue = virtio_get_queue();
-    if (!queue)
-    {
-        tiny_log(ERROR, "[VIRTIO] No queue available for legacy operation\n");
-        return false;
-    }
-    return virtio_queue_submit_request(queue, desc_head);
-}
-
 bool virtio_queue_wait_for_completion(virtqueue_t *queue)
 {
     if (!queue)
@@ -912,18 +853,6 @@ bool virtio_queue_wait_for_completion(virtqueue_t *queue)
 
     tiny_log(WARN, "[VIRTIO] Queue %d: Request timeout\n", queue->queue_id);
     return false;
-}
-
-// Legacy wrapper function for backward compatibility
-bool virtio_queue_wait_for_completion_legacy(void)
-{
-    virtqueue_t *queue = virtio_get_queue();
-    if (!queue)
-    {
-        tiny_log(ERROR, "[VIRTIO] No queue available for legacy operation\n");
-        return false;
-    }
-    return virtio_queue_wait_for_completion(queue);
 }
 
 uint64_t virtio_scan_devices(uint32_t target_device_id)
