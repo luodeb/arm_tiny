@@ -15,44 +15,131 @@ typedef enum
     ERROR,
 } LOG_LEVEL;
 
-static inline uint8_t read8(const volatile void *addr) {
+typedef union
+{
+    int i;
+    unsigned int u;
+    long l;
+    unsigned long ul;
+    char c;
+    const char *s;
+    void *p;
+    uintptr_t ptr;
+} printf_arg_t;
+
+static inline uint8_t read8(const volatile void *addr)
+{
     return *(const volatile uint8_t *)addr;
 }
 
-static inline void write8(uint8_t value, volatile void *addr) {
+static inline void write8(uint8_t value, volatile void *addr)
+{
     *(volatile uint8_t *)addr = value;
 }
 
-static inline uint16_t read16(const volatile void *addr) {
+static inline uint16_t read16(const volatile void *addr)
+{
     return *(const volatile uint16_t *)addr;
 }
 
-static inline void write16(uint16_t value, volatile void *addr) {
+static inline void write16(uint16_t value, volatile void *addr)
+{
     *(volatile uint16_t *)addr = value;
 }
 
-
-static inline uint32_t read32(const volatile void *addr) {
+static inline uint32_t read32(const volatile void *addr)
+{
     return *(const volatile uint32_t *)addr;
 }
 
-static inline void write32(uint32_t value, volatile void *addr) {
+static inline void write32(uint32_t value, volatile void *addr)
+{
     *(volatile uint32_t *)addr = value;
 }
 
-static inline uint64_t read64(const volatile void *addr) {
+static inline uint64_t read64(const volatile void *addr)
+{
     return *(const volatile uint64_t *)addr;
 }
 
-static inline void write64(uint64_t value, volatile void *addr) {
+static inline void write64(uint64_t value, volatile void *addr)
+{
     *(volatile uint64_t *)addr = value;
 }
 
 void tiny_io_init();
-void tiny_printf(LOG_LEVEL level, const char *format, ...);
-void tiny_hello(void);
+void format_and_print_extended(const char *format, printf_arg_t args[], int arg_count);
 void soft_delay_ms(int n);
+void print_str(const char *str);
 void print_char(char c);
+
+#define printf_ext0(fmt) format_and_print_extended(fmt, NULL, 0)
+
+#define printf_ext1(fmt, a1)                              \
+    do                                                    \
+    {                                                     \
+        printf_arg_t args[] = {{.ptr = (uintptr_t)(a1)}}; \
+        format_and_print_extended(fmt, args, 1);          \
+    } while (0)
+
+#define printf_ext2(fmt, a1, a2)                                                    \
+    do                                                                              \
+    {                                                                               \
+        printf_arg_t args[] = {{.ptr = (uintptr_t)(a1)}, {.ptr = (uintptr_t)(a2)}}; \
+        format_and_print_extended(fmt, args, 2);                                    \
+    } while (0)
+
+#define printf_ext3(fmt, a1, a2, a3)                                                                          \
+    do                                                                                                        \
+    {                                                                                                         \
+        printf_arg_t args[] = {{.ptr = (uintptr_t)(a1)}, {.ptr = (uintptr_t)(a2)}, {.ptr = (uintptr_t)(a3)}}; \
+        format_and_print_extended(fmt, args, 3);                                                              \
+    } while (0)
+
+#define printf_ext4(fmt, a1, a2, a3, a4)                                                                                                \
+    do                                                                                                                                  \
+    {                                                                                                                                   \
+        printf_arg_t args[] = {{.ptr = (uintptr_t)(a1)}, {.ptr = (uintptr_t)(a2)}, {.ptr = (uintptr_t)(a3)}, {.ptr = (uintptr_t)(a4)}}; \
+        format_and_print_extended(fmt, args, 4);                                                                                        \
+    } while (0)
+
+#define printf_ext5(fmt, a1, a2, a3, a4, a5)                                                                                                                      \
+    do                                                                                                                                                            \
+    {                                                                                                                                                             \
+        printf_arg_t args[] = {{.ptr = (uintptr_t)(a1)}, {.ptr = (uintptr_t)(a2)}, {.ptr = (uintptr_t)(a3)}, {.ptr = (uintptr_t)(a4)}, {.ptr = (uintptr_t)(a5)}}; \
+        format_and_print_extended(fmt, args, 5);                                                                                                                  \
+    } while (0)
+
+#define GET_MACRO(_0, _1, _2, _3, _4, _5, _6, NAME, ...) NAME
+
+#define printf_ext(...) GET_MACRO(_0, ##__VA_ARGS__, \
+                                  printf_ext5, printf_ext4, printf_ext3, printf_ext2, printf_ext1, printf_ext0)(__VA_ARGS__)
+
+#define tiny_log_base(level, format, ...)  \
+    do                                     \
+    {                                      \
+        switch (level)                     \
+        {                                  \
+        case INFO:                         \
+            printf_ext("\033[32m");        \
+            break;                         \
+        case WARN:                         \
+            printf_ext("\033[33m");        \
+            break;                         \
+        case DEBUG:                        \
+            printf_ext("\033[34m");        \
+            break;                         \
+        case ERROR:                        \
+            printf_ext("\033[31m");        \
+            break;                         \
+        }                                  \
+        printf_ext(format, ##__VA_ARGS__); \
+        printf_ext("\033[0m");             \
+    } while (0)
+
+// 显示行号和文件名
+#define tiny_log(level, format, ...) \
+    tiny_log_base(level, "[%s:%d] " format, __FILE__, __LINE__, ##__VA_ARGS__)
 
 // PSCI function IDs for system shutdown
 #define PSCI_SYSTEM_OFF 0x84000008
@@ -60,7 +147,7 @@ void print_char(char c);
 // ARM64 system shutdown function using PSCI
 static inline void system_shutdown(void)
 {
-    tiny_printf(INFO, "Shutting down system...\n");
+    tiny_log(DEBUG, "Shutting down system...\n");
 
     // PSCI call to shutdown the system
     __asm__ volatile(

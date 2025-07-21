@@ -48,7 +48,8 @@ void handle_sync_exception(uint64_t *stack_pointer)
 
     tiny_printf(INFO, "usp: %x, elr: %x, spsr: %x\n", usp_value, elr_el1_value, spsr_value);
 
-    while(1) ;
+    while (1)
+        ;
 }
 
 void handle_irq_exception(uint64_t *stack_pointer)
@@ -88,10 +89,7 @@ void handle_irq_exception(uint64_t *stack_pointer)
 }
 void invalid_exception(uint64_t *stack_pointer, uint64_t kind, uint64_t source)
 {
-    // trap_frame_t *el1_ctx = (trap_frame_t *)stack_pointer;
-
-    // uint64_t x2_value = el1_ctx->r[2];
+    tiny_log(ERROR, "Invalid exception occurred!\n");
     while (1)
         ;
 }
-

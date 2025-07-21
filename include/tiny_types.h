@@ -14,6 +14,7 @@ typedef    _Bool  bool;
 #define true  1
 
 #define SIZE_MAX		(9223372036854775807UL)
+#define NULL (void *)0
 
 #define MIN(a, b)		((a) < (b) ? (a) : (b))
 #define MAX(a, b)		((a) > (b) ? (a) : (b))
