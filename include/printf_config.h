@@ -1,0 +1,6 @@
+#ifndef PRINTF_CONFIG_H
+#define PRINTF_CONFIG_H
+
+#define PRINTF_DISABLE_SUPPORT_FLOAT
+
+#endif

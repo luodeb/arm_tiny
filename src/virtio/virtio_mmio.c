@@ -13,13 +13,13 @@
 #include "tiny_io.h"
 #include "config.h"
 
-static virtio_queue_manager_t *queue_manager_global = (virtio_queue_manager_t *)0x46000000;
+static virtio_queue_manager_t queue_manager_global = {0};
 static bool queue_manager_initialized = false;
 static virtio_device_t virtio_dev;
 
 virtio_queue_manager_t *virtio_get_queue_manager()
 {
-    return queue_manager_global;
+    return &queue_manager_global;
 }
 
 // ARM cache management functions for DMA coherency
@@ -788,7 +788,7 @@ bool virtio_queue_submit_request(virtqueue_t *queue, uint16_t desc_head)
 #if USE_VIRTIO_IRQ
     virtio_reset_interrupt_state();
 #endif
-    tiny_log(ERROR, "queue->device->base_addr : %x", queue->device->base_addr);
+    // tiny_log(ERROR, "queue->device->base_addr : %x", queue->device->base_addr);
 
     // Notify device - use the device queue index
     virtio_write32(queue->device->base_addr + VIRTIO_MMIO_QUEUE_NOTIFY, queue->device_queue_idx);

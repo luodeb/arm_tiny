@@ -16,9 +16,11 @@
 static virtio_blk_config_t blk_config;
 
 // Buffer for block operations - use same memory region as queues for physical address consistency
-#define VIRTIO_DATA_BASE 0x45100000 // Just after queue memory
-static uint8_t *sector_buffer = (uint8_t *)(VIRTIO_DATA_BASE);
-static virtio_blk_req_t *blk_request = (virtio_blk_req_t *)(VIRTIO_DATA_BASE + VIRTIO_BLK_SECTOR_SIZE);
+// #define VIRTIO_DATA_BASE 0x45100000 // Just after queue memory
+// static uint8_t *sector_buffer = (uint8_t *)(VIRTIO_DATA_BASE);
+static uint8_t sector_buffer[VIRTIO_BLK_SECTOR_SIZE] __attribute__((aligned(16))) = {0};
+static virtio_blk_req_t blk_request_global __attribute__((aligned(16))) = {0};
+static virtio_blk_req_t *blk_request = &blk_request_global; ///(virtio_blk_req_t *)(VIRTIO_DATA_BASE + VIRTIO_BLK_SECTOR_SIZE);
 static virtio_device_t blk_dev_global = {0};
 
 virtio_device_t *virtio_get_blk_device(void)
@@ -31,12 +33,12 @@ bool virtio_blk_init(void)
     tiny_log(INFO, "[VIRTIO_BLK] Initializing VirtIO Block device\n");
 
     // Initialize data memory region
-    tiny_log(DEBUG, "[VIRTIO_BLK] Initializing data region at 0x%x\n", VIRTIO_DATA_BASE);
+    // tiny_log(DEBUG, "[VIRTIO_BLK] Initializing data region at 0x%x\n", VIRTIO_DATA_BASE);
 
     // Clear sector buffer and request structure memory
-    for (int i = 0; i < VIRTIO_BLK_SECTOR_SIZE + sizeof(virtio_blk_req_t); i++)
+    for (int i = 0; i < VIRTIO_BLK_SECTOR_SIZE; i++)
     {
-        ((uint8_t *)VIRTIO_DATA_BASE)[i] = 0;
+        sector_buffer[i] = 0;
     }
 
     tiny_log(DEBUG, "[VIRTIO_BLK] Data region cleared: sector_buffer=0x%p, blk_request=0x%p\n",

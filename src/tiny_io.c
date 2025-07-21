@@ -39,6 +39,11 @@ void print_char(char c)
     uart_putchar_nonlock(c);
 }
 
+void _putchar(char character)
+{
+    print_char(character);
+}
+
 void print_str(const char *str)
 {
     while (*str)

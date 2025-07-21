@@ -1,8 +1,11 @@
 {
     "files.associations": {
+        "*.make": "makefile",
+        "*.vue": "vue",
         "*.kts": "gradle",
         "timer.h": "c",
         "gicv2.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "printf_config.h": "c"
     }
 }

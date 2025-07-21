@@ -27,7 +27,9 @@ OBJECTS = $(C_OBJECTS) $(ASM_OBJECTS)
 TARGET = arm_tiny
 
 # Compiler flags
-CFLAGS = -Wall -I$(INCLUDE_DIR) -c -lc -g -O0 -fno-pie -fno-builtin-printf -mgeneral-regs-only -DVM_VERSION=\"$(if $(VM_VERSION),$(VM_VERSION),"null")\"
+CFLAGS = -Wall -I$(INCLUDE_DIR) -c -lc -g -O0 -fno-pie -fno-builtin-printf\
+-DPRINTF_INCLUDE_CONFIG_H \
+ -mgeneral-regs-only -DVM_VERSION=\"$(if $(VM_VERSION),$(VM_VERSION),"null")\"
 LDFLAGS = -T link.lds
 
 # Build rules

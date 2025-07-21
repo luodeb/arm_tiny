@@ -2,6 +2,7 @@
 #define __IO_H__
 
 #include "tiny_types.h"
+#include "printf.h"
 
 // 配置打印日志
 #define TINY_DEBUG
@@ -140,6 +141,30 @@ void print_char(char c);
 #define printf_ext(...) GET_MACRO(_0, ##__VA_ARGS__, \
                                   printf_ext8, printf_ext7, printf_ext6, printf_ext5, printf_ext4, printf_ext3, printf_ext2, printf_ext1, printf_ext0)(__VA_ARGS__)
 
+#define set_color(level)            \
+    do                              \
+    {                               \
+        switch (level)              \
+        {                           \
+        case INFO:                  \
+            printf_ext("\033[32m"); \
+            break;                  \
+        case WARN:                  \
+            printf_ext("\033[33m"); \
+            break;                  \
+        case DEBUG:                 \
+            printf_ext("\033[34m"); \
+            break;                  \
+        case ERROR:                 \
+            printf_ext("\033[31m"); \
+            break;                  \
+        default:                    \
+            printf_ext("\033[0m");  \
+            break;                  \
+        }                           \
+    } while (0)
+#define reset_color() printf_ext("\033[0m")
+
 #define tiny_log_base(level, file, line, format, ...) \
     do                                                \
     {                                                 \
@@ -167,8 +192,15 @@ void print_char(char c);
     } while (0)
 
 // 显示行号和文件名
-#define tiny_log(level, format, ...) \
-    tiny_log_base(level, __FILE__, __LINE__, format, ##__VA_ARGS__)
+#define tiny_log(level, format, ...)            \
+    do                                          \
+    {                                           \
+        printf("[%s:%d] ", __FILE__, __LINE__); \
+        set_color(level);                       \
+        printf(format, ##__VA_ARGS__);          \
+        reset_color();                          \
+    } while (0)
+// tiny_log_base(level, __FILE__, __LINE__, format, ##__VA_ARGS__)
 
 // PSCI function IDs for system shutdown
 #define PSCI_SYSTEM_OFF 0x84000008
