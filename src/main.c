@@ -33,127 +33,127 @@ static uint32_t my_strlen(const char *str)
 int kernel_main(void)
 {
     tiny_io_init();
-    tiny_printf(INFO, "\nHello, ARM Tiny VM%s!\n", VM_VERSION);
+    tiny_log(INFO, "\nHello, ARM Tiny VM%s!\n", VM_VERSION);
 
 #if USE_VIRTIO_IRQ
     // Initialize GIC
-    tiny_printf(INFO, "=== Initializing GIC ===\n");
+    tiny_log(INFO, "=== Initializing GIC ===\n");
     gic_init();
 
     // Initialize Timer
-    tiny_printf(INFO, "=== Initializing Timer ===\n");
+    tiny_log(INFO, "=== Initializing Timer ===\n");
     timer_init();
 
     // Test Timer interrupts
-    tiny_printf(INFO, "=== Testing Timer Interrupts ===\n");
+    tiny_log(INFO, "=== Testing Timer Interrupts ===\n");
     if (!timer_test_simple())
     {
-        tiny_printf(WARN, "Timer interrupt test FAILED\n");
+        tiny_log(WARN, "Timer interrupt test FAILED\n");
         goto error_exit;
     }
-    tiny_printf(INFO, "Timer interrupt test PASSED\n");
+    tiny_log(INFO, "Timer interrupt test PASSED\n");
     // Initialize VirtIO Interrupts
-    tiny_printf(INFO, "=== Initializing VirtIO Interrupts ===\n");
+    tiny_log(INFO, "=== Initializing VirtIO Interrupts ===\n");
     if (!virtio_interrupt_init())
     {
-        tiny_printf(WARN, "VirtIO interrupt initialization FAILED\n");
+        tiny_log(WARN, "VirtIO interrupt initialization FAILED\n");
         goto error_exit;
     }
-    tiny_printf(INFO, "VirtIO interrupt initialization SUCCESSFUL\n");
+    tiny_log(INFO, "VirtIO interrupt initialization SUCCESSFUL\n");
 #else
-    tiny_printf(INFO, "VirtIO interrupts are disabled (USE_VIRTIO_IRQ=0)\n");
+    tiny_log(INFO, "VirtIO interrupts are disabled (USE_VIRTIO_IRQ=0)\n");
 #endif
 
-    tiny_printf(INFO, "Starting VirtIO Debug Tests...\n");
+    tiny_log(INFO, "Starting VirtIO Debug Tests...\n");
     // Test 1: Basic hang point isolation
-    tiny_printf(INFO, "=== Testing Hang Points ===\n");
+    tiny_log(INFO, "=== Testing Hang Points ===\n");
     if (!virtio_test_hang_points())
     {
-        tiny_printf(WARN, "Hang point tests FAILED\n");
+        tiny_log(WARN, "Hang point tests FAILED\n");
         goto error_exit;
     }
 
     // Test 1.5: Multi-Queue Functionality Test
-    tiny_printf(INFO, "=== Testing VirtIO Multi-Queue Functionality ===\n");
+    tiny_log(INFO, "=== Testing VirtIO Multi-Queue Functionality ===\n");
     if (!virtio_test_multiqueue_functionality())
     {
-        tiny_printf(WARN, "Multi-queue tests FAILED\n");
+        tiny_log(WARN, "Multi-queue tests FAILED\n");
         goto error_exit;
     }
-    tiny_printf(INFO, "Multi-queue tests PASSED\n");
+    tiny_log(INFO, "Multi-queue tests PASSED\n");
 
     // Test 2: Initialize VirtIO and test basic access
-    tiny_printf(INFO, "=== Testing VirtIO Initialization ===\n");
+    tiny_log(INFO, "=== Testing VirtIO Initialization ===\n");
     if (!virtio_blk_init())
     {
-        tiny_printf(WARN, "VirtIO Block device initialization FAILED\n");
+        tiny_log(WARN, "VirtIO Block device initialization FAILED\n");
         goto error_exit;
     }
 
     // Test 3: Basic device access
-    tiny_printf(INFO, "=== Testing Basic Device Access ===\n");
+    tiny_log(INFO, "=== Testing Basic Device Access ===\n");
     if (!virtio_test_basic_access())
     {
-        tiny_printf(WARN, "Basic access test FAILED\n");
+        tiny_log(WARN, "Basic access test FAILED\n");
         goto error_exit;
     }
 
     // Test 5: VirtIO Block Sector Read Test
-    tiny_printf(INFO, "=== Testing VirtIO Block Sector Read ===\n");
+    tiny_log(INFO, "=== Testing VirtIO Block Sector Read ===\n");
     uint8_t sector_buffer[512];
     if (!virtio_blk_read_sector(0, sector_buffer))
     {
-        tiny_printf(ERROR, "Failed to read sector 0 (boot sector)\n");
+        tiny_log(ERROR, "Failed to read sector 0 (boot sector)\n");
         goto error_exit;
     }
 
-    tiny_printf(INFO, "Successfully read boot sector (sector 0)\n");
-    tiny_printf(DEBUG, "Boot sector first 64 bytes:\n");
+    tiny_log(INFO, "Successfully read boot sector (sector 0)\n");
+    tiny_log(DEBUG, "Boot sector first 64 bytes:\n");
     for (int i = 0; i < 64; i++)
     {
         if (i % 16 == 0)
-            tiny_printf(DEBUG, "%04x: ", i);
-        tiny_printf(DEBUG, "%02x ", sector_buffer[i]);
+            tiny_log(DEBUG, "%04x: ", i);
+        tiny_log(DEBUG, "%02x ", sector_buffer[i]);
         if (i % 16 == 15)
-            tiny_printf(DEBUG, "\n");
+            tiny_log(DEBUG, "\n");
     }
 
     // Test 6: FAT32 File System Test
-    tiny_printf(INFO, "=== Testing FAT32 File System ===\n");
+    tiny_log(INFO, "=== Testing FAT32 File System ===\n");
     if (!fat32_init())
     {
-        tiny_printf(ERROR, "Failed to initialize FAT32 file system\n");
+        tiny_log(ERROR, "Failed to initialize FAT32 file system\n");
         goto error_exit;
     }
-    tiny_printf(INFO, "FAT32 file system initialized successfully\n");
+    tiny_log(INFO, "FAT32 file system initialized successfully\n");
 
     // Test 7: File Writing Test
-    tiny_printf(INFO, "=== Testing File Writing ===\n");
+    tiny_log(INFO, "=== Testing File Writing ===\n");
     const char *test_data = "Hello, this is a test file created by the FAT32 implementation!\nThis file contains multiple lines.\nLine 10086 of the test file.";
     if (!fat32_write_file("hello.txt", test_data, my_strlen(test_data)))
     {
-        tiny_printf(WARN, "Failed to write test.txt file\n");
+        tiny_log(WARN, "Failed to write test.txt file\n");
     }
     else
     {
-        tiny_printf(INFO, "Successfully wrote test.txt file\n");
+        tiny_log(INFO, "Successfully wrote test.txt file\n");
     }
 
     // Test 8: File Reading Test
-    tiny_printf(INFO, "=== Testing File Reading ===\n");
+    tiny_log(INFO, "=== Testing File Reading ===\n");
     char file_content[512];
     if (!fat32_read_file("hello.txt", file_content, 511))
     {
-        tiny_printf(WARN, "Failed to read hello.txt file\n");
+        tiny_log(WARN, "Failed to read hello.txt file\n");
     }
     else
     {
         file_content[511] = '\0'; // Ensure null termination
-        tiny_printf(INFO, "Successfully read test.txt file\n");
-        tiny_printf(INFO, "File content: %s\n", file_content);
+        tiny_log(INFO, "Successfully read test.txt file\n");
+        tiny_log(INFO, "File content: %s\n", file_content);
     }
 
-    tiny_printf(INFO, "All VirtIO tests completed successfully!\n");
+    tiny_log(INFO, "All VirtIO tests completed successfully!\n");
 
     // Shutdown the system automatically
     system_shutdown();
@@ -161,7 +161,7 @@ int kernel_main(void)
     return 0;
 
 error_exit:
-    tiny_printf(WARN, "System stopped due to error\n");
+    tiny_log(WARN, "System stopped due to error\n");
 
     // Shutdown the system even on error
     system_shutdown();

@@ -51,17 +51,17 @@ void timer_irq_handler(uint64_t *ctx)
 {
     timer_interrupt_count++;
 
-    tiny_printf(WARN, "[TIMER] Timer interrupt #%d triggered\n", timer_interrupt_count);
+    tiny_log(WARN, "[TIMER] Timer interrupt #%d triggered\n", timer_interrupt_count);
 
     // Disable timer to prevent continuous interrupts
     write_cntp_ctl_el0(CNTP_CTL_IMASK);
 
-    tiny_printf(WARN, "[TIMER] Timer interrupt handled and disabled\n");
+    tiny_log(WARN, "[TIMER] Timer interrupt handled and disabled\n");
 }
 
 void timer_init(void)
 {
-    tiny_printf(DEBUG, "[TIMER] Initializing ARM Generic Timer\n");
+    tiny_log(DEBUG, "[TIMER] Initializing ARM Generic Timer\n");
 
     // Reset interrupt counter
     timer_interrupt_count = 0;
@@ -74,26 +74,26 @@ void timer_init(void)
 
     // Get timer frequency
     uint64_t freq = read_cntfrq_el0();
-    tiny_printf(DEBUG, "[TIMER] Timer frequency: %llu Hz\n", freq);
+    tiny_log(DEBUG, "[TIMER] Timer frequency: %llu Hz\n", freq);
 
     // Initially disable timer
     write_cntp_ctl_el0(CNTP_CTL_IMASK);
 
-    tiny_printf(DEBUG, "[TIMER] Timer initialization completed\n");
+    tiny_log(DEBUG, "[TIMER] Timer initialization completed\n");
 }
 
 bool timer_test_simple(void)
 {
-    tiny_printf(DEBUG, "[TIMER] Starting simple timer interrupt test\n");
+    tiny_log(DEBUG, "[TIMER] Starting simple timer interrupt test\n");
 
     uint32_t initial_count = timer_interrupt_count;
-    tiny_printf(DEBUG, "[TIMER] Initial interrupt count: %d\n", initial_count);
+    tiny_log(DEBUG, "[TIMER] Initial interrupt count: %d\n", initial_count);
 
     // Get timer frequency for calculating timeout
     uint64_t freq = read_cntfrq_el0();
     uint64_t timeout_ticks = freq / 10; // 100ms timeout
 
-    tiny_printf(DEBUG, "[TIMER] Setting timer for 100ms (%llu ticks)\n", timeout_ticks);
+    tiny_log(DEBUG, "[TIMER] Setting timer for 100ms (%llu ticks)\n", timeout_ticks);
 
     // Enable interrupts globally
     enable_interrupts();
@@ -102,7 +102,7 @@ bool timer_test_simple(void)
     write_cntp_tval_el0(timeout_ticks);
     write_cntp_ctl_el0(CNTP_CTL_ENABLE);
 
-    tiny_printf(DEBUG, "[TIMER] Timer started, waiting for interrupt...\n");
+    tiny_log(DEBUG, "[TIMER] Timer started, waiting for interrupt...\n");
 
     // Wait for interrupt (simple polling with timeout)
     uint64_t start_time = read_cntpct_el0();
@@ -113,15 +113,15 @@ bool timer_test_simple(void)
         uint64_t current_time = read_cntpct_el0();
         if ((current_time - start_time) > max_wait)
         {
-            tiny_printf(WARN, "[TIMER] Timeout waiting for timer interrupt\n");
+            tiny_log(WARN, "[TIMER] Timeout waiting for timer interrupt\n");
             // Disable timer
             write_cntp_ctl_el0(CNTP_CTL_IMASK);
             return false;
         }
     }
 
-    tiny_printf(DEBUG, "[TIMER] Timer interrupt received! Count: %d\n", timer_interrupt_count);
-    tiny_printf(DEBUG, "[TIMER] Simple timer test PASSED\n");
+    tiny_log(DEBUG, "[TIMER] Timer interrupt received! Count: %d\n", timer_interrupt_count);
+    tiny_log(DEBUG, "[TIMER] Simple timer test PASSED\n");
 
     return true;
 }

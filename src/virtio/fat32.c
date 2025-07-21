@@ -103,44 +103,44 @@ void fat32_format_filename(const char *filename, char *fat_name)
 
 bool fat32_init(void)
 {
-    tiny_printf(INFO, "[FAT32] Initializing FAT32 file system\n");
+    tiny_log(INFO, "[FAT32] Initializing FAT32 file system\n");
 
     fat32_fs.initialized = false;
 
-    tiny_printf(DEBUG, "[FAT32] Reading boot sector\n");
+    tiny_log(DEBUG, "[FAT32] Reading boot sector\n");
 
     if (!fat32_parse_boot_sector())
     {
-        tiny_printf(WARN, "[FAT32] Boot sector parsing FAILED\n");
+        tiny_log(WARN, "[FAT32] Boot sector parsing FAILED\n");
         return false;
     }
 
     fat32_fs.initialized = true;
-    tiny_printf(INFO, "[FAT32] File system initialization SUCCESSFUL\n");
+    tiny_log(INFO, "[FAT32] File system initialization SUCCESSFUL\n");
     return true;
 }
 
 bool fat32_parse_boot_sector(void)
 {
-    tiny_printf(DEBUG, "[FAT32] Parsing boot sector\n");
+    tiny_log(DEBUG, "[FAT32] Parsing boot sector\n");
 
     // Read boot sector (sector 0)
     if (!virtio_blk_read_sector(0, &fat32_fs.boot_sector))
     {
-        tiny_printf(WARN, "[FAT32] Failed to read boot sector\n");
+        tiny_log(WARN, "[FAT32] Failed to read boot sector\n");
         return false;
     }
 
     // Verify FAT32 signature
     if (read_unaligned_u16(&fat32_fs.boot_sector.bytes_per_sector) != 512)
     {
-        tiny_printf(WARN, "[FAT32] Invalid bytes per sector: %d\n", read_unaligned_u16(&fat32_fs.boot_sector.bytes_per_sector));
+        tiny_log(WARN, "[FAT32] Invalid bytes per sector: %d\n", read_unaligned_u16(&fat32_fs.boot_sector.bytes_per_sector));
         return false;
     }
 
     if (read_unaligned_u32(&fat32_fs.boot_sector.fat_size_32) == 0)
     {
-        tiny_printf(WARN, "[FAT32] Invalid FAT32 signature\n");
+        tiny_log(WARN, "[FAT32] Invalid FAT32 signature\n");
         return false;
     }
 
@@ -152,10 +152,10 @@ bool fat32_parse_boot_sector(void)
     fat32_fs.sectors_per_cluster = fat32_fs.boot_sector.sectors_per_cluster;
     fat32_fs.bytes_per_sector = read_unaligned_u16(&fat32_fs.boot_sector.bytes_per_sector);
 
-    tiny_printf(INFO, "[FAT32] Boot sector parsed - FAT start: %d, Data start: %d, Root cluster: %d\n",
-                fat32_fs.fat_start_sector, fat32_fs.data_start_sector, fat32_fs.root_dir_cluster);
-    tiny_printf(INFO, "[FAT32] Sectors per cluster: %d, Bytes per sector: %d\n",
-                fat32_fs.sectors_per_cluster, fat32_fs.bytes_per_sector);
+    tiny_log(INFO, "[FAT32] Boot sector parsed - FAT start: %d, Data start: %d, Root cluster: %d\n",
+             fat32_fs.fat_start_sector, fat32_fs.data_start_sector, fat32_fs.root_dir_cluster);
+    tiny_log(INFO, "[FAT32] Sectors per cluster: %d, Bytes per sector: %d\n",
+             fat32_fs.sectors_per_cluster, fat32_fs.bytes_per_sector);
 
     return true;
 }
@@ -167,20 +167,20 @@ uint32_t fat32_get_next_cluster(uint32_t cluster)
     uint32_t fat_sector = fat32_fs.fat_start_sector + (fat_offset / fat32_fs.bytes_per_sector);
     uint32_t entry_offset = fat_offset % fat32_fs.bytes_per_sector;
 
-    tiny_printf(DEBUG, "[FAT32] Getting next cluster for %d: FAT sector=%d, offset=%d\n",
-                cluster, fat_sector, entry_offset);
+    tiny_log(DEBUG, "[FAT32] Getting next cluster for %d: FAT sector=%d, offset=%d\n",
+             cluster, fat_sector, entry_offset);
 
     // Read FAT sector
     if (!virtio_blk_read_sector(fat_sector, sector_buf))
     {
-        tiny_printf(WARN, "[FAT32] Failed to read FAT sector %d\n", fat_sector);
+        tiny_log(WARN, "[FAT32] Failed to read FAT sector %d\n", fat_sector);
         return FAT32_EOC;
     }
 
     // Extract next cluster value
     uint32_t next_cluster = *(uint32_t *)(sector_buf + entry_offset) & 0x0FFFFFFF;
 
-    tiny_printf(DEBUG, "[FAT32] Next cluster: 0x%x\n", next_cluster);
+    tiny_log(DEBUG, "[FAT32] Next cluster: 0x%x\n", next_cluster);
 
     return next_cluster;
 }
@@ -189,14 +189,14 @@ bool fat32_read_cluster(uint32_t cluster, void *buffer)
 {
     if (cluster < 2 || cluster >= FAT32_EOC)
     {
-        tiny_printf(WARN, "[FAT32] Invalid cluster number: %d\n", cluster);
+        tiny_log(WARN, "[FAT32] Invalid cluster number: %d\n", cluster);
         return false;
     }
 
     // Calculate cluster's first sector
     uint32_t first_sector = fat32_fs.data_start_sector + ((cluster - 2) * fat32_fs.sectors_per_cluster);
 
-    tiny_printf(DEBUG, "[FAT32] Reading cluster %d (sector %d)\n", cluster, first_sector);
+    tiny_log(DEBUG, "[FAT32] Reading cluster %d (sector %d)\n", cluster, first_sector);
 
     // Read all sectors in the cluster
     for (uint32_t i = 0; i < fat32_fs.sectors_per_cluster; i++)
@@ -204,7 +204,7 @@ bool fat32_read_cluster(uint32_t cluster, void *buffer)
         uint8_t *buf_offset = (uint8_t *)buffer + (i * fat32_fs.bytes_per_sector);
         if (!virtio_blk_read_sector(first_sector + i, buf_offset))
         {
-            tiny_printf(WARN, "[FAT32] Failed to read sector %d of cluster %d\n", first_sector + i, cluster);
+            tiny_log(WARN, "[FAT32] Failed to read sector %d of cluster %d\n", first_sector + i, cluster);
             return false;
         }
     }
@@ -216,14 +216,14 @@ bool fat32_write_cluster(uint32_t cluster, const void *buffer)
 {
     if (cluster < 2 || cluster >= FAT32_EOC)
     {
-        tiny_printf(WARN, "[FAT32] Invalid cluster number: %d\n", cluster);
+        tiny_log(WARN, "[FAT32] Invalid cluster number: %d\n", cluster);
         return false;
     }
 
     // Calculate cluster's first sector
     uint32_t first_sector = fat32_fs.data_start_sector + ((cluster - 2) * fat32_fs.sectors_per_cluster);
 
-    tiny_printf(DEBUG, "[FAT32] Writing cluster %d (sector %d)\n", cluster, first_sector);
+    tiny_log(DEBUG, "[FAT32] Writing cluster %d (sector %d)\n", cluster, first_sector);
 
     // Write all sectors in the cluster
     for (uint32_t i = 0; i < fat32_fs.sectors_per_cluster; i++)
@@ -231,7 +231,7 @@ bool fat32_write_cluster(uint32_t cluster, const void *buffer)
         const uint8_t *buf_offset = (const uint8_t *)buffer + (i * fat32_fs.bytes_per_sector);
         if (!virtio_blk_write_sector(first_sector + i, buf_offset))
         {
-            tiny_printf(WARN, "[FAT32] Failed to write sector %d of cluster %d\n", first_sector + i, cluster);
+            tiny_log(WARN, "[FAT32] Failed to write sector %d of cluster %d\n", first_sector + i, cluster);
             return false;
         }
     }
@@ -244,8 +244,8 @@ bool fat32_find_file_in_dir(uint32_t dir_cluster, const char *filename, fat32_di
     char target_name[11];
     fat32_format_filename(filename, target_name);
 
-    tiny_printf(DEBUG, "[FAT32] Looking for file '%s' (formatted as '%s') in cluster %d\n",
-                filename, target_name, dir_cluster);
+    tiny_log(DEBUG, "[FAT32] Looking for file '%s' (formatted as '%s') in cluster %d\n",
+             filename, target_name, dir_cluster);
 
     uint32_t current_cluster = dir_cluster;
 
@@ -254,7 +254,7 @@ bool fat32_find_file_in_dir(uint32_t dir_cluster, const char *filename, fat32_di
         // Read cluster
         if (!fat32_read_cluster(current_cluster, cluster_buf))
         {
-            tiny_printf(WARN, "[FAT32] Failed to read directory cluster %d\n", current_cluster);
+            tiny_log(WARN, "[FAT32] Failed to read directory cluster %d\n", current_cluster);
             return false;
         }
 
@@ -269,7 +269,7 @@ bool fat32_find_file_in_dir(uint32_t dir_cluster, const char *filename, fat32_di
             // End of directory
             if (dir_entry->name[0] == 0x00)
             {
-                tiny_printf(DEBUG, "[FAT32] End of directory reached\n");
+                tiny_log(DEBUG, "[FAT32] End of directory reached\n");
                 return false;
             }
 
@@ -286,12 +286,12 @@ bool fat32_find_file_in_dir(uint32_t dir_cluster, const char *filename, fat32_di
             }
 
             // Compare filename
-            tiny_printf(DEBUG, "[FAT32] Comparing '%s' with '%s'\n", dir_entry->name, target_name);
+            tiny_log(DEBUG, "[FAT32] Comparing '%s' with '%s'\n", dir_entry->name, target_name);
             if (fat32_compare_filename((char *)dir_entry->name, target_name, 11))
             {
-                tiny_printf(INFO, "[FAT32] File found: '%s', size=%d, first_cluster=%d\n",
-                            dir_entry->name, read_unaligned_u32(&dir_entry->file_size),
-                            (read_unaligned_u16(&dir_entry->first_cluster_high) << 16) | read_unaligned_u16(&dir_entry->first_cluster_low));
+                tiny_log(INFO, "[FAT32] File found: '%s', size=%d, first_cluster=%d\n",
+                         dir_entry->name, read_unaligned_u32(&dir_entry->file_size),
+                         (read_unaligned_u16(&dir_entry->first_cluster_high) << 16) | read_unaligned_u16(&dir_entry->first_cluster_low));
 
                 // Copy entry
                 for (int j = 0; j < sizeof(fat32_dir_entry_t); j++)
@@ -306,17 +306,17 @@ bool fat32_find_file_in_dir(uint32_t dir_cluster, const char *filename, fat32_di
         current_cluster = fat32_get_next_cluster(current_cluster);
     }
 
-    tiny_printf(WARN, "[FAT32] File '%s' not found\n", filename);
+    tiny_log(WARN, "[FAT32] File '%s' not found\n", filename);
     return false;
 }
 
 bool fat32_read_file(const char *filename, char *buffer, uint32_t max_size)
 {
-    tiny_printf(INFO, "[FAT32] Reading file '%s'\n", filename);
+    tiny_log(INFO, "[FAT32] Reading file '%s'\n", filename);
 
     if (!fat32_fs.initialized)
     {
-        tiny_printf(WARN, "[FAT32] File system not initialized\n");
+        tiny_log(WARN, "[FAT32] File system not initialized\n");
         return false;
     }
 
@@ -324,18 +324,18 @@ bool fat32_read_file(const char *filename, char *buffer, uint32_t max_size)
     fat32_dir_entry_t file_entry;
     if (!fat32_find_file_in_dir(fat32_fs.root_dir_cluster, filename, &file_entry))
     {
-        tiny_printf(WARN, "[FAT32] File '%s' not found\n", filename);
+        tiny_log(WARN, "[FAT32] File '%s' not found\n", filename);
         return false;
     }
 
     uint32_t file_size = file_entry.file_size;
     uint32_t first_cluster = (file_entry.first_cluster_high << 16) | file_entry.first_cluster_low;
 
-    tiny_printf(INFO, "[FAT32] File info - Size: %d bytes, First cluster: %d\n", file_size, first_cluster);
+    tiny_log(INFO, "[FAT32] File info - Size: %d bytes, First cluster: %d\n", file_size, first_cluster);
 
     if (file_size > max_size)
     {
-        tiny_printf(WARN, "[FAT32] File too large: %d > %d\n", file_size, max_size);
+        tiny_log(WARN, "[FAT32] File too large: %d > %d\n", file_size, max_size);
         return false;
     }
 
@@ -349,7 +349,7 @@ bool fat32_read_file(const char *filename, char *buffer, uint32_t max_size)
         // Read cluster
         if (!fat32_read_cluster(current_cluster, cluster_buf))
         {
-            tiny_printf(WARN, "[FAT32] Failed to read file cluster %d\n", current_cluster);
+            tiny_log(WARN, "[FAT32] Failed to read file cluster %d\n", current_cluster);
             return false;
         }
 
@@ -363,8 +363,8 @@ bool fat32_read_file(const char *filename, char *buffer, uint32_t max_size)
 
         bytes_read += bytes_to_copy;
 
-        tiny_printf(DEBUG, "[FAT32] Read cluster %d, bytes_read=%d/%d\n",
-                    current_cluster, bytes_read, file_size);
+        tiny_log(DEBUG, "[FAT32] Read cluster %d, bytes_read=%d/%d\n",
+                 current_cluster, bytes_read, file_size);
 
         // Get next cluster
         current_cluster = fat32_get_next_cluster(current_cluster);
@@ -376,13 +376,13 @@ bool fat32_read_file(const char *filename, char *buffer, uint32_t max_size)
         buffer[bytes_read] = '\0';
     }
 
-    tiny_printf(INFO, "[FAT32] File read SUCCESSFUL - %d bytes\n", bytes_read);
+    tiny_log(INFO, "[FAT32] File read SUCCESSFUL - %d bytes\n", bytes_read);
     return true;
 }
 
 uint32_t fat32_allocate_cluster(void)
 {
-    tiny_printf(DEBUG, "[FAT32] Allocating new cluster\n");
+    tiny_log(DEBUG, "[FAT32] Allocating new cluster\n");
 
     // Simple allocation: start from cluster 2 and find first free cluster
     // In a real implementation, you'd use the FSInfo sector to track free clusters
@@ -391,12 +391,12 @@ uint32_t fat32_allocate_cluster(void)
         uint32_t next_cluster = fat32_get_next_cluster(cluster);
         if (next_cluster == FAT32_FREE_CLUSTER)
         {
-            tiny_printf(DEBUG, "[FAT32] Found free cluster: %d\n", cluster);
+            tiny_log(DEBUG, "[FAT32] Found free cluster: %d\n", cluster);
             return cluster;
         }
     }
 
-    tiny_printf(WARN, "[FAT32] No free clusters available\n");
+    tiny_log(WARN, "[FAT32] No free clusters available\n");
     return FAT32_EOC;
 }
 
@@ -407,13 +407,14 @@ bool fat32_set_fat_entry(uint32_t cluster, uint32_t value)
     uint32_t fat_sector = fat32_fs.fat_start_sector + (fat_offset / fat32_fs.bytes_per_sector);
     uint32_t entry_offset = fat_offset % fat32_fs.bytes_per_sector;
 
-    tiny_printf(DEBUG, "[FAT32] Setting FAT entry for cluster %d to 0x%x: FAT sector=%d, offset=%d\n",
-                cluster, value, fat_sector, entry_offset);
+    tiny_log(DEBUG, "[FAT32] Setting FAT entry for cluster %d to 0x%x: FAT sector=%d,",
+             cluster, value, fat_sector);
+    tiny_log(DEBUG, " offset=%d\n", entry_offset);
 
     // Read FAT sector
     if (!virtio_blk_read_sector(fat_sector, sector_buf))
     {
-        tiny_printf(WARN, "[FAT32] Failed to read FAT sector %d\n", fat_sector);
+        tiny_log(WARN, "[FAT32] Failed to read FAT sector %d\n", fat_sector);
         return false;
     }
 
@@ -422,12 +423,12 @@ bool fat32_set_fat_entry(uint32_t cluster, uint32_t value)
     uint32_t old_value = *fat_entry;
     *fat_entry = (old_value & 0xF0000000) | (value & 0x0FFFFFFF);
 
-    tiny_printf(DEBUG, "[FAT32] Updated FAT entry: 0x%x -> 0x%x\n", old_value, *fat_entry);
+    tiny_log(DEBUG, "[FAT32] Updated FAT entry: 0x%x -> 0x%x\n", old_value, *fat_entry);
 
     // Write FAT sector back
     if (!virtio_blk_write_sector(fat_sector, sector_buf))
     {
-        tiny_printf(WARN, "[FAT32] Failed to write FAT sector %d\n", fat_sector);
+        tiny_log(WARN, "[FAT32] Failed to write FAT sector %d\n", fat_sector);
         return false;
     }
 
@@ -437,7 +438,7 @@ bool fat32_set_fat_entry(uint32_t cluster, uint32_t value)
         uint32_t backup_fat_sector = fat_sector + read_unaligned_u32(&fat32_fs.boot_sector.fat_size_32);
         if (!virtio_blk_write_sector(backup_fat_sector, sector_buf))
         {
-            tiny_printf(WARN, "[FAT32] Failed to write backup FAT sector %d\n", backup_fat_sector);
+            tiny_log(WARN, "[FAT32] Failed to write backup FAT sector %d\n", backup_fat_sector);
             // Continue anyway - backup FAT is not critical
         }
     }
@@ -450,8 +451,8 @@ bool fat32_create_dir_entry(uint32_t dir_cluster, const char *filename, uint32_t
     char target_name[11];
     fat32_format_filename(filename, target_name);
 
-    tiny_printf(DEBUG, "[FAT32] Creating directory entry for '%s' (formatted as '%s') in cluster %d\n",
-                filename, target_name, dir_cluster);
+    tiny_log(DEBUG, "[FAT32] Creating directory entry for '%s' (formatted as '%s') in cluster %d\n",
+             filename, target_name, dir_cluster);
 
     uint32_t current_cluster = dir_cluster;
 
@@ -460,7 +461,7 @@ bool fat32_create_dir_entry(uint32_t dir_cluster, const char *filename, uint32_t
         // Read cluster
         if (!fat32_read_cluster(current_cluster, cluster_buf))
         {
-            tiny_printf(WARN, "[FAT32] Failed to read directory cluster %d\n", current_cluster);
+            tiny_log(WARN, "[FAT32] Failed to read directory cluster %d\n", current_cluster);
             return false;
         }
 
@@ -475,7 +476,7 @@ bool fat32_create_dir_entry(uint32_t dir_cluster, const char *filename, uint32_t
             // Found empty slot (deleted entry or end of directory)
             if (dir_entry->name[0] == 0x00 || dir_entry->name[0] == 0xE5)
             {
-                tiny_printf(DEBUG, "[FAT32] Found empty slot at entry %d\n", i);
+                tiny_log(DEBUG, "[FAT32] Found empty slot at entry %d\n", i);
 
                 // Clear the entry
                 for (int j = 0; j < sizeof(fat32_dir_entry_t); j++)
@@ -505,16 +506,16 @@ bool fat32_create_dir_entry(uint32_t dir_cluster, const char *filename, uint32_t
                 write_unaligned_u16(&dir_entry->write_date, 0x0000);
                 write_unaligned_u16(&dir_entry->last_access_date, 0x0000);
 
-                tiny_printf(DEBUG, "[FAT32] Directory entry created - cluster=%d, size=%d\n", first_cluster, file_size);
+                tiny_log(DEBUG, "[FAT32] Directory entry created - cluster=%d, size=%d\n", first_cluster, file_size);
 
                 // Write cluster back
                 if (!fat32_write_cluster(current_cluster, cluster_buf))
                 {
-                    tiny_printf(WARN, "[FAT32] Failed to write directory cluster %d\n", current_cluster);
+                    tiny_log(WARN, "[FAT32] Failed to write directory cluster %d\n", current_cluster);
                     return false;
                 }
 
-                tiny_printf(INFO, "[FAT32] Directory entry created successfully\n");
+                tiny_log(INFO, "[FAT32] Directory entry created successfully\n");
                 return true;
             }
         }
@@ -523,17 +524,17 @@ bool fat32_create_dir_entry(uint32_t dir_cluster, const char *filename, uint32_t
         current_cluster = fat32_get_next_cluster(current_cluster);
     }
 
-    tiny_printf(WARN, "[FAT32] No empty directory entry slots found\n");
+    tiny_log(WARN, "[FAT32] No empty directory entry slots found\n");
     return false;
 }
 
 bool fat32_write_file(const char *filename, const char *data, uint32_t size)
 {
-    tiny_printf(INFO, "[FAT32] Writing file '%s' (%d bytes)\n", filename, size);
+    tiny_log(INFO, "[FAT32] Writing file '%s' (%d bytes)\n", filename, size);
 
     if (!fat32_fs.initialized)
     {
-        tiny_printf(WARN, "[FAT32] File system not initialized\n");
+        tiny_log(WARN, "[FAT32] File system not initialized\n");
         return false;
     }
 
@@ -541,7 +542,7 @@ bool fat32_write_file(const char *filename, const char *data, uint32_t size)
     fat32_dir_entry_t existing_entry;
     if (fat32_find_file_in_dir(fat32_fs.root_dir_cluster, filename, &existing_entry))
     {
-        tiny_printf(WARN, "[FAT32] File '%s' already exists - overwriting not implemented\n", filename);
+        tiny_log(WARN, "[FAT32] File '%s' already exists - overwriting not implemented\n", filename);
         return false;
     }
 
@@ -551,14 +552,14 @@ bool fat32_write_file(const char *filename, const char *data, uint32_t size)
     if (clusters_needed == 0)
         clusters_needed = 1; // At least one cluster
 
-    tiny_printf(DEBUG, "[FAT32] Need %d clusters for %d bytes (cluster size: %d)\n",
-                clusters_needed, size, cluster_size);
+    tiny_log(DEBUG, "[FAT32] Need %d clusters for %d bytes (cluster size: %d)\n",
+             clusters_needed, size, cluster_size);
 
     // Allocate clusters
     uint32_t first_cluster = fat32_allocate_cluster();
     if (first_cluster >= FAT32_EOC)
     {
-        tiny_printf(WARN, "[FAT32] Failed to allocate first cluster\n");
+        tiny_log(WARN, "[FAT32] Failed to allocate first cluster\n");
         return false;
     }
 
@@ -581,12 +582,12 @@ bool fat32_write_file(const char *filename, const char *data, uint32_t size)
             cluster_buf[j] = data[bytes_written + j];
         }
 
-        tiny_printf(DEBUG, "[FAT32] Writing cluster %d (%d bytes)\n", current_cluster, bytes_to_copy);
+        tiny_log(DEBUG, "[FAT32] Writing cluster %d (%d bytes)\n", current_cluster, bytes_to_copy);
 
         // Write cluster
         if (!fat32_write_cluster(current_cluster, cluster_buf))
         {
-            tiny_printf(WARN, "[FAT32] Failed to write cluster %d\n", current_cluster);
+            tiny_log(WARN, "[FAT32] Failed to write cluster %d\n", current_cluster);
             return false;
         }
 
@@ -601,7 +602,7 @@ bool fat32_write_file(const char *filename, const char *data, uint32_t size)
             uint32_t next_cluster = fat32_allocate_cluster();
             if (next_cluster >= FAT32_EOC)
             {
-                tiny_printf(WARN, "[FAT32] Failed to allocate cluster %d\n", i + 1);
+                tiny_log(WARN, "[FAT32] Failed to allocate cluster %d\n", i + 1);
                 return false;
             }
             next_cluster_value = next_cluster;
@@ -611,7 +612,7 @@ bool fat32_write_file(const char *filename, const char *data, uint32_t size)
         // Update FAT entry
         if (!fat32_set_fat_entry(current_cluster, next_cluster_value))
         {
-            tiny_printf(WARN, "[FAT32] Failed to update FAT entry for cluster %d\n", current_cluster);
+            tiny_log(WARN, "[FAT32] Failed to update FAT entry for cluster %d\n", current_cluster);
             return false;
         }
     }
@@ -619,10 +620,10 @@ bool fat32_write_file(const char *filename, const char *data, uint32_t size)
     // Create directory entry
     if (!fat32_create_dir_entry(fat32_fs.root_dir_cluster, filename, first_cluster, size))
     {
-        tiny_printf(WARN, "[FAT32] Failed to create directory entry\n");
+        tiny_log(WARN, "[FAT32] Failed to create directory entry\n");
         return false;
     }
 
-    tiny_printf(INFO, "[FAT32] File '%s' written successfully (%d bytes)\n", filename, size);
+    tiny_log(INFO, "[FAT32] File '%s' written successfully (%d bytes)\n", filename, size);
     return true;
 }

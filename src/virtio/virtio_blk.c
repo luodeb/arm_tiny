@@ -24,10 +24,10 @@ static virtio_blk_req_t *blk_request = (virtio_blk_req_t *)(VIRTIO_DATA_BASE + V
 
 bool virtio_blk_init(void)
 {
-    tiny_printf(INFO, "[VIRTIO_BLK] Initializing VirtIO Block device\n");
+    tiny_log(INFO, "[VIRTIO_BLK] Initializing VirtIO Block device\n");
 
     // Initialize data memory region
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Initializing data region at 0x%x\n", VIRTIO_DATA_BASE);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Initializing data region at 0x%x\n", VIRTIO_DATA_BASE);
 
     // Clear sector buffer and request structure memory
     for (int i = 0; i < VIRTIO_BLK_SECTOR_SIZE + sizeof(virtio_blk_req_t); i++)
@@ -35,41 +35,41 @@ bool virtio_blk_init(void)
         ((uint8_t *)VIRTIO_DATA_BASE)[i] = 0;
     }
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Data region cleared: sector_buffer=0x%p, blk_request=0x%p\n",
-                sector_buffer, blk_request);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Data region cleared: sector_buffer=0x%p, blk_request=0x%p\n",
+             sector_buffer, blk_request);
 
     // Scan for VirtIO Block device
     uint64_t blk_device_addr = virtio_scan_devices(VIRTIO_DEVICE_ID_BLOCK);
     if (blk_device_addr == 0)
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] No VirtIO Block device found\n");
+        tiny_log(WARN, "[VIRTIO_BLK] No VirtIO Block device found\n");
         return false;
     }
 
-    tiny_printf(INFO, "[VIRTIO_BLK] Found VirtIO Block device at 0x%x\n", (uint32_t)blk_device_addr);
+    tiny_log(INFO, "[VIRTIO_BLK] Found VirtIO Block device at 0x%x\n", (uint32_t)blk_device_addr);
 
     // Get device from MMIO layer
     blk_dev = virtio_get_device();
     if (!virtio_device_init(blk_dev, blk_device_addr))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Device initialization FAILED\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Device initialization FAILED\n");
         return false;
     }
 
     // Verify this is a block device (double check)
     if (blk_dev->device_id != VIRTIO_DEVICE_ID_BLOCK)
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Device ID mismatch: expected %d, got %d\n",
-                    VIRTIO_DEVICE_ID_BLOCK, blk_dev->device_id);
+        tiny_log(WARN, "[VIRTIO_BLK] Device ID mismatch: expected %d, got %d\n",
+                 VIRTIO_DEVICE_ID_BLOCK, blk_dev->device_id);
         return false;
     }
 
-    tiny_printf(INFO, "[VIRTIO_BLK] Block device verified\n");
+    tiny_log(INFO, "[VIRTIO_BLK] Block device verified\n");
 
     // Verify test.img compatibility
-    tiny_printf(INFO, "[VIRTIO_BLK] Verifying test environment:\n");
-    tiny_printf(INFO, "[VIRTIO_BLK] - Expected image size: 1048576 bytes (2048 sectors)\n");
-    tiny_printf(INFO, "[VIRTIO_BLK] - Expected format: FAT32\n");
+    tiny_log(INFO, "[VIRTIO_BLK] Verifying test environment:\n");
+    tiny_log(INFO, "[VIRTIO_BLK] - Expected image size: 1048576 bytes (2048 sectors)\n");
+    tiny_log(INFO, "[VIRTIO_BLK] - Expected format: FAT32\n");
 
     // Read device configuration
     uint64_t config_addr = blk_dev->base_addr + 0x100; // Configuration space starts at offset 0x100
@@ -78,25 +78,25 @@ bool virtio_blk_init(void)
     blk_config.seg_max = virtio_read32(config_addr + 12);
     blk_config.blk_size = virtio_read32(config_addr + 20);
 
-    tiny_printf(INFO, "[VIRTIO_BLK] Device config - Capacity: %d sectors, Block size: %d\n",
-                (uint32_t)blk_config.capacity, blk_config.blk_size);
+    tiny_log(INFO, "[VIRTIO_BLK] Device config - Capacity: %d sectors, Block size: %d\n",
+             (uint32_t)blk_config.capacity, blk_config.blk_size);
 
     // Verify device configuration matches test.img
     if (blk_config.capacity != 2048)
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] WARNING: Device capacity (%d) doesn't match test.img (2048 sectors)\n",
-                    (uint32_t)blk_config.capacity);
+        tiny_log(WARN, "[VIRTIO_BLK] WARNING: Device capacity (%d) doesn't match test.img (2048 sectors)\n",
+                 (uint32_t)blk_config.capacity);
     }
     if (blk_config.blk_size != 512)
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] WARNING: Block size (%d) is not standard 512 bytes\n",
-                    blk_config.blk_size);
+        tiny_log(WARN, "[VIRTIO_BLK] WARNING: Block size (%d) is not standard 512 bytes\n",
+                 blk_config.blk_size);
     }
 
     // Initialize queue manager if not already done
     if (!virtio_queue_manager_init())
     {
-        tiny_printf(ERROR, "[VIRTIO_BLK] Failed to initialize queue manager\n");
+        tiny_log(ERROR, "[VIRTIO_BLK] Failed to initialize queue manager\n");
         return false;
     }
 
@@ -104,14 +104,14 @@ bool virtio_blk_init(void)
     blk_queue = virtio_queue_alloc(blk_dev, 0); // Queue index 0 for block device
     if (!blk_queue)
     {
-        tiny_printf(ERROR, "[VIRTIO_BLK] Failed to allocate queue\n");
+        tiny_log(ERROR, "[VIRTIO_BLK] Failed to allocate queue\n");
         return false;
     }
 
     // Initialize the allocated queue
     if (!virtio_queue_init(blk_queue))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Queue initialization FAILED\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Queue initialization FAILED\n");
         virtio_queue_free(blk_queue);
         return false;
     }
@@ -120,27 +120,27 @@ bool virtio_blk_init(void)
     virtio_set_status(blk_dev, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER |
                                    VIRTIO_STATUS_FEATURES_OK | VIRTIO_STATUS_DRIVER_OK);
 
-    tiny_printf(INFO, "[VIRTIO_BLK] Device ready for operation\n");
+    tiny_log(INFO, "[VIRTIO_BLK] Device ready for operation\n");
     return true;
 }
 
 bool virtio_blk_read_sector(uint32_t sector, void *buffer)
 {
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Reading sector %d\n", sector);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Reading sector %d\n", sector);
 
     if (!blk_dev || !blk_queue)
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Device not initialized\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Device not initialized\n");
         return false;
     }
 
     // Check device status before operation
     uint32_t device_status = virtio_read32(blk_dev->base_addr + VIRTIO_MMIO_STATUS);
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Device status before operation: 0x%x\n", device_status);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Device status before operation: 0x%x\n", device_status);
 
     if (!(device_status & VIRTIO_STATUS_DRIVER_OK))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Device not ready! Status: 0x%x\n", device_status);
+        tiny_log(WARN, "[VIRTIO_BLK] Device not ready! Status: 0x%x\n", device_status);
         return false;
     }
 
@@ -150,15 +150,15 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
         ((uint8_t *)blk_request)[i] = 0;
     }
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Request structure cleared\n");
+    tiny_log(DEBUG, "[VIRTIO_BLK] Request structure cleared\n");
 
     // Debug: Check structure alignment and address
-    tiny_printf(DEBUG, "[VIRTIO_BLK] blk_request address: 0x%p\n", blk_request);
-    tiny_printf(DEBUG, "[VIRTIO_BLK] blk_request->header address: 0x%p\n", &blk_request->header);
-    tiny_printf(DEBUG, "[VIRTIO_BLK] blk_request->header.sector address: 0x%p\n", &blk_request->header.sector);
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Structure size: %d bytes\n", (int)sizeof(virtio_blk_req_t));
+    tiny_log(DEBUG, "[VIRTIO_BLK] blk_request address: 0x%p\n", blk_request);
+    tiny_log(DEBUG, "[VIRTIO_BLK] blk_request->header address: 0x%p\n", &blk_request->header);
+    tiny_log(DEBUG, "[VIRTIO_BLK] blk_request->header.sector address: 0x%p\n", &blk_request->header.sector);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Structure size: %d bytes\n", (int)sizeof(virtio_blk_req_t));
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Queue size: %d\n", blk_queue->queue_size);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Queue size: %d\n", blk_queue->queue_size);
 
     // Clear buffers
     for (int i = 0; i < VIRTIO_BLK_SECTOR_SIZE; i++)
@@ -166,7 +166,7 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
         sector_buffer[i] = 0;
     }
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Sector buffer cleared\n");
+    tiny_log(DEBUG, "[VIRTIO_BLK] Sector buffer cleared\n");
 
     // Setup request header - set values before reading
     blk_request->header.type = VIRTIO_BLK_T_IN; // Read operation
@@ -174,15 +174,15 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     blk_request->header.sector = sector;
     blk_request->status = 0xFF; // Set to non-zero to detect completion
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Request header configured - Type: %d, Sector: %d, Status: 0x%x\n",
-                blk_request->header.type, (uint32_t)blk_request->header.sector, blk_request->status);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Request header configured - Type: %d, Sector: %d, Status: 0x%x\n",
+             blk_request->header.type, (uint32_t)blk_request->header.sector, blk_request->status);
 
     // Setup descriptors
     // Descriptor 0: Request header (device read)
     if (!virtio_queue_add_descriptor(blk_queue, 0, (uint64_t)&blk_request->header,
                                      sizeof(virtio_blk_req_header_t), VIRTQ_DESC_F_NEXT, 1))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Failed to add header descriptor\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Failed to add header descriptor\n");
         return false;
     }
 
@@ -191,7 +191,7 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
                                      VIRTIO_BLK_SECTOR_SIZE,
                                      VIRTQ_DESC_F_WRITE | VIRTQ_DESC_F_NEXT, 2))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Failed to add data descriptor\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Failed to add data descriptor\n");
         return false;
     }
 
@@ -199,16 +199,16 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     if (!virtio_queue_add_descriptor(blk_queue, 2, (uint64_t)&blk_request->status,
                                      1, VIRTQ_DESC_F_WRITE, 0))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Failed to add status descriptor\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Failed to add status descriptor\n");
         return false;
     }
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
+    tiny_log(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
 
     // Submit request
     if (!virtio_queue_submit_request(blk_queue, 0))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Failed to submit request\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Failed to submit request\n");
         return false;
     }
 
@@ -216,14 +216,14 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
 #if USE_VIRTIO_IRQ
     if (!virtio_wait_for_interrupt(VIRTIO_IRQ_TIMEOUT_MS))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Request timeout (interrupt not received)\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Request timeout (interrupt not received)\n");
         return false;
     }
 #else
     // Polling mode - wait for completion
     if (!virtio_queue_wait_for_completion(blk_queue))
     {
-        tiny_printf(ERROR, "[VIRTIO_BLK] Request timeout\n");
+        tiny_log(ERROR, "[VIRTIO_BLK] Request timeout\n");
         return false;
     }
 #endif
@@ -235,11 +235,11 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     // Check status
     if (blk_request->status != VIRTIO_BLK_S_OK)
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Request failed with status: %d\n", blk_request->status);
+        tiny_log(WARN, "[VIRTIO_BLK] Request failed with status: %d\n", blk_request->status);
         return false;
     }
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Read completed successfully\n");
+    tiny_log(DEBUG, "[VIRTIO_BLK] Read completed successfully\n");
 
     // Copy data to output buffer
     for (int i = 0; i < VIRTIO_BLK_SECTOR_SIZE; i++)
@@ -247,27 +247,27 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
         ((uint8_t *)buffer)[i] = sector_buffer[i];
     }
 
-    tiny_printf(INFO, "[VIRTIO_BLK] Sector %d read SUCCESSFUL\n", sector);
+    tiny_log(INFO, "[VIRTIO_BLK] Sector %d read SUCCESSFUL\n", sector);
     return true;
 }
 
 bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
 {
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Writing sector %d\n", sector);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Writing sector %d\n", sector);
 
     if (!blk_dev || !blk_queue)
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Device not initialized\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Device not initialized\n");
         return false;
     }
 
     // Check device status before operation
     uint32_t device_status = virtio_read32(blk_dev->base_addr + VIRTIO_MMIO_STATUS);
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Device status before operation: 0x%x\n", device_status);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Device status before operation: 0x%x\n", device_status);
 
     if (!(device_status & VIRTIO_STATUS_DRIVER_OK))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Device not ready! Status: 0x%x\n", device_status);
+        tiny_log(WARN, "[VIRTIO_BLK] Device not ready! Status: 0x%x\n", device_status);
         return false;
     }
 
@@ -277,7 +277,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
         ((uint8_t *)blk_request)[i] = 0;
     }
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Request structure cleared\n");
+    tiny_log(DEBUG, "[VIRTIO_BLK] Request structure cleared\n");
 
     // Copy input data to sector buffer
     for (int i = 0; i < VIRTIO_BLK_SECTOR_SIZE; i++)
@@ -285,7 +285,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
         sector_buffer[i] = ((const uint8_t *)buffer)[i];
     }
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Data copied to sector buffer\n");
+    tiny_log(DEBUG, "[VIRTIO_BLK] Data copied to sector buffer\n");
 
     // Setup request header - set values before writing
     blk_request->header.type = VIRTIO_BLK_T_OUT; // Write operation
@@ -293,8 +293,8 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     blk_request->header.sector = sector;
     blk_request->status = 0xFF; // Set to non-zero to detect completion
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Request header configured - Type: %d, Sector: %d, Status: 0x%x\n",
-                blk_request->header.type, (uint32_t)blk_request->header.sector, blk_request->status);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Request header configured - Type: %d, Sector: %d, Status: 0x%x\n",
+             blk_request->header.type, (uint32_t)blk_request->header.sector, blk_request->status);
 
     // Clean data buffer cache before device reads
     virtio_cache_clean_range((uint64_t)sector_buffer, VIRTIO_BLK_SECTOR_SIZE);
@@ -305,7 +305,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     if (!virtio_queue_add_descriptor(blk_queue, 0, (uint64_t)&blk_request->header,
                                      sizeof(virtio_blk_req_header_t), VIRTQ_DESC_F_NEXT, 1))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Failed to add header descriptor\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Failed to add header descriptor\n");
         return false;
     }
 
@@ -313,7 +313,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     if (!virtio_queue_add_descriptor(blk_queue, 1, (uint64_t)sector_buffer,
                                      VIRTIO_BLK_SECTOR_SIZE, VIRTQ_DESC_F_NEXT, 2))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Failed to add data descriptor\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Failed to add data descriptor\n");
         return false;
     }
 
@@ -321,16 +321,16 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     if (!virtio_queue_add_descriptor(blk_queue, 2, (uint64_t)&blk_request->status,
                                      1, VIRTQ_DESC_F_WRITE, 0))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Failed to add status descriptor\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Failed to add status descriptor\n");
         return false;
     }
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
+    tiny_log(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
 
     // Submit request
     if (!virtio_queue_submit_request(blk_queue, 0))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Failed to submit request\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Failed to submit request\n");
         return false;
     }
 
@@ -338,14 +338,14 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
 #if USE_VIRTIO_IRQ
     if (!virtio_wait_for_interrupt(VIRTIO_IRQ_TIMEOUT_MS))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Request timeout (interrupt not received)\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Request timeout (interrupt not received)\n");
         return false;
     }
 #else
     // Polling mode - wait for completion
     if (!virtio_queue_wait_for_completion(blk_queue))
     {
-        tiny_printf(ERROR, "[VIRTIO_BLK] Request timeout\n");
+        tiny_log(ERROR, "[VIRTIO_BLK] Request timeout\n");
         return false;
     }
 #endif
@@ -356,12 +356,12 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     // Check status
     if (blk_request->status != VIRTIO_BLK_S_OK)
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Write request failed with status: %d\n", blk_request->status);
+        tiny_log(WARN, "[VIRTIO_BLK] Write request failed with status: %d\n", blk_request->status);
         return false;
     }
 
-    tiny_printf(DEBUG, "[VIRTIO_BLK] Write completed successfully\n");
-    tiny_printf(INFO, "[VIRTIO_BLK] Sector %d write SUCCESSFUL\n", sector);
+    tiny_log(DEBUG, "[VIRTIO_BLK] Write completed successfully\n");
+    tiny_log(INFO, "[VIRTIO_BLK] Sector %d write SUCCESSFUL\n", sector);
     return true;
 }
 
@@ -376,31 +376,31 @@ uint64_t virtio_blk_get_capacity(void)
 
 bool virtio_blk_test(void)
 {
-    tiny_printf(INFO, "[VIRTIO_BLK] Running block device test\n");
+    tiny_log(INFO, "[VIRTIO_BLK] Running block device test\n");
 
     if (!virtio_blk_init())
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Test FAILED - initialization error\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Test FAILED - initialization error\n");
         return false;
     }
 
     uint64_t capacity = virtio_blk_get_capacity();
-    tiny_printf(INFO, "[VIRTIO_BLK] Device capacity: %d sectors\n", (uint32_t)capacity);
+    tiny_log(INFO, "[VIRTIO_BLK] Device capacity: %d sectors\n", (uint32_t)capacity);
 
     // Test reading sector 0 (boot sector)
     uint8_t test_buffer[VIRTIO_BLK_SECTOR_SIZE];
     if (!virtio_blk_read_sector(0, test_buffer))
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Test FAILED - sector read error\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Test FAILED - sector read error\n");
         return false;
     }
 
-    tiny_printf(INFO, "[VIRTIO_BLK] Test SUCCESSFUL - first 16 bytes: ");
+    tiny_log(INFO, "[VIRTIO_BLK] Test SUCCESSFUL - first 16 bytes: ");
     for (int i = 0; i < 16; i++)
     {
-        tiny_printf(NONE, "%x ", test_buffer[i]);
+        tiny_log(NONE, "%x ", test_buffer[i]);
     }
-    tiny_printf(NONE, "\n");
+    tiny_log(NONE, "\n");
 
     return true;
 }
