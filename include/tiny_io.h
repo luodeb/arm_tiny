@@ -158,6 +158,9 @@ void print_char(char c);
         case ERROR:                        \
             printf_ext("\033[31m");        \
             break;                         \
+        default:                           \
+            printf_ext("\033[0m");         \
+            break;                         \
         }                                  \
         printf_ext(format, ##__VA_ARGS__); \
         printf_ext("\033[0m");             \
