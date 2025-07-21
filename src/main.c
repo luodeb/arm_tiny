@@ -11,9 +11,12 @@
 #define VM_VERSION "null"
 #endif
 
+void test_extended_printf();
 int kernel_main(void)
 {
-    tiny_printf(INFO, "\nHello, ARM Tiny VM [%s]!\n", VM_VERSION);
+    tiny_log(INFO, "Hello, ARM Tiny VM [%s]!\n", VM_VERSION);
+
+    test_extended_printf();
 
     system_shutdown();
     return 0;
