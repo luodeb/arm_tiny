@@ -112,10 +112,10 @@ int kernel_main(void)
     for (int i = 0; i < 64; i++)
     {
         if (i % 16 == 0)
-            tiny_log(DEBUG, "%04x: ", i);
-        tiny_log(DEBUG, "%02x ", sector_buffer[i]);
+            printf_ext("%4x: ", i);
+        printf_ext("%2x ", sector_buffer[i]);
         if (i % 16 == 15)
-            tiny_log(DEBUG, "\n");
+            printf_ext("\n");
     }
 
     // Test 6: FAT32 File System Test
@@ -154,6 +154,7 @@ int kernel_main(void)
     }
 
     tiny_log(INFO, "All VirtIO tests completed successfully!\n");
+    printf_ext("All");
 
     // Shutdown the system automatically
     system_shutdown();

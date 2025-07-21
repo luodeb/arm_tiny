@@ -2,7 +2,6 @@
 #define __IO_H__
 
 #include "tiny_types.h"
-#include <stdarg.h>
 
 // 配置打印日志
 #define TINY_DEBUG

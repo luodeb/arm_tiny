@@ -130,7 +130,7 @@ void utoa_simple(unsigned int num, char *str, int base)
 // 扩展的格式化处理函数
 void format_and_print_extended(const char *format, printf_arg_t args[], int arg_count)
 {
-    char buffer[32];
+    char buffer[512];
     const char *p = format;
     int arg_index = 0;
 

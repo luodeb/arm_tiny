@@ -13,9 +13,14 @@
 #include "tiny_io.h"
 #include "config.h"
 
-static virtio_queue_manager_t queue_manager;
+static virtio_queue_manager_t *queue_manager_global = (virtio_queue_manager_t *)0x46000000;
 static bool queue_manager_initialized = false;
 static virtio_device_t virtio_dev;
+
+virtio_queue_manager_t *virtio_get_queue_manager()
+{
+    return queue_manager_global;
+}
 
 // ARM cache management functions for DMA coherency
 void virtio_cache_clean_range(uint64_t start, uint32_t size)
@@ -163,7 +168,6 @@ bool virtio_device_init(virtio_device_t *dev, uint64_t base_addr)
     // Fill device structure
     dev->base_addr = base_addr;
     dev->magic = virtio_read32(base_addr + VIRTIO_MMIO_MAGIC);
-    tiny_log(ERROR, "[VIRTIO] Magic value: 0x%x\n", dev->magic);
 
     uint32_t hw_version = virtio_read32(base_addr + VIRTIO_MMIO_VERSION);
     dev->device_id = virtio_read32(base_addr + VIRTIO_MMIO_DEVICE_ID);
@@ -301,6 +305,7 @@ void virtio_set_status(virtio_device_t *dev, uint8_t status)
 // Multi-queue management functions
 bool virtio_queue_manager_init(void)
 {
+    virtio_queue_manager_t *queue_manager = virtio_get_queue_manager();
     tiny_log(INFO, "[VIRTIO] Initializing queue manager %d\n", queue_manager_initialized);
     if (queue_manager_initialized)
     {
@@ -311,14 +316,14 @@ bool virtio_queue_manager_init(void)
     // Initialize all queues as free
     for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
     {
-        queue_manager.queues[i].in_use = false;
-        queue_manager.queues[i].queue_id = 0;
-        queue_manager.queues[i].device = NULL;
+        queue_manager->queues[i].in_use = false;
+        queue_manager->queues[i].queue_id = 0;
+        queue_manager->queues[i].device = NULL;
     }
     tiny_log(INFO, "[VIRTIO] Initializing queue manager %d\n", queue_manager_initialized);
 
-    queue_manager.next_queue_id = 1; // Start from 1, 0 is invalid
-    queue_manager.allocated_count = 0;
+    queue_manager->next_queue_id = 1; // Start from 1, 0 is invalid
+    queue_manager->allocated_count = 0;
     queue_manager_initialized = true;
 
     tiny_log(INFO, "[VIRTIO] Queue manager initialized (max queues: %d)\n", VIRTIO_MAX_TOTAL_QUEUES);
@@ -327,6 +332,7 @@ bool virtio_queue_manager_init(void)
 
 virtqueue_t *virtio_queue_alloc(virtio_device_t *dev, uint32_t device_queue_idx)
 {
+    virtio_queue_manager_t *queue_manager = virtio_get_queue_manager();
     if (!queue_manager_initialized)
     {
         if (!virtio_queue_manager_init())
@@ -342,7 +348,7 @@ virtqueue_t *virtio_queue_alloc(virtio_device_t *dev, uint32_t device_queue_idx)
         return NULL;
     }
 
-    if (queue_manager.allocated_count >= VIRTIO_MAX_TOTAL_QUEUES)
+    if (queue_manager->allocated_count >= VIRTIO_MAX_TOTAL_QUEUES)
     {
         tiny_log(ERROR, "[VIRTIO] No free queues available (max: %d)\n", VIRTIO_MAX_TOTAL_QUEUES);
         return NULL;
@@ -351,19 +357,19 @@ virtqueue_t *virtio_queue_alloc(virtio_device_t *dev, uint32_t device_queue_idx)
     // Find a free queue slot
     for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
     {
-        if (!queue_manager.queues[i].in_use)
+        if (!queue_manager->queues[i].in_use)
         {
-            virtqueue_t *queue = &queue_manager.queues[i];
+            virtqueue_t *queue = &queue_manager->queues[i];
 
             // Initialize queue structure
-            queue->queue_id = queue_manager.next_queue_id++;
+            queue->queue_id = queue_manager->next_queue_id++;
             queue->device_queue_idx = device_queue_idx;
             queue->device = dev;
             queue->in_use = true;
             queue->last_used_idx = 0;
             queue->queue_size = 0; // Will be set during initialization
 
-            queue_manager.allocated_count++;
+            queue_manager->allocated_count++;
 
             return queue;
         }
@@ -375,6 +381,7 @@ virtqueue_t *virtio_queue_alloc(virtio_device_t *dev, uint32_t device_queue_idx)
 
 void virtio_queue_free(virtqueue_t *queue)
 {
+    virtio_queue_manager_t *queue_manager = virtio_get_queue_manager();
     if (!queue || !queue->in_use)
     {
         tiny_log(WARN, "[VIRTIO] Attempt to free invalid or already free queue\n");
@@ -391,11 +398,12 @@ void virtio_queue_free(virtqueue_t *queue)
     queue->avail = NULL;
     queue->used = NULL;
 
-    queue_manager.allocated_count--;
+    queue_manager->allocated_count--;
 }
 
 virtqueue_t *virtio_queue_get_by_id(uint32_t queue_id)
 {
+    virtio_queue_manager_t *queue_manager = virtio_get_queue_manager();
     if (!queue_manager_initialized || queue_id == 0)
     {
         return NULL;
@@ -403,9 +411,9 @@ virtqueue_t *virtio_queue_get_by_id(uint32_t queue_id)
 
     for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
     {
-        if (queue_manager.queues[i].in_use && queue_manager.queues[i].queue_id == queue_id)
+        if (queue_manager->queues[i].in_use && queue_manager->queues[i].queue_id == queue_id)
         {
-            return &queue_manager.queues[i];
+            return &queue_manager->queues[i];
         }
     }
 
@@ -414,6 +422,7 @@ virtqueue_t *virtio_queue_get_by_id(uint32_t queue_id)
 
 virtqueue_t *virtio_queue_get_device_queue(virtio_device_t *dev, uint32_t device_queue_idx)
 {
+    virtio_queue_manager_t *queue_manager = virtio_get_queue_manager();
     if (!queue_manager_initialized || !dev)
     {
         return NULL;
@@ -421,11 +430,11 @@ virtqueue_t *virtio_queue_get_device_queue(virtio_device_t *dev, uint32_t device
 
     for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
     {
-        if (queue_manager.queues[i].in_use &&
-            queue_manager.queues[i].device == dev &&
-            queue_manager.queues[i].device_queue_idx == device_queue_idx)
+        if (queue_manager->queues[i].in_use &&
+            queue_manager->queues[i].device == dev &&
+            queue_manager->queues[i].device_queue_idx == device_queue_idx)
         {
-            return &queue_manager.queues[i];
+            return &queue_manager->queues[i];
         }
     }
 
@@ -714,6 +723,8 @@ bool virtio_queue_add_descriptor(virtqueue_t *queue, uint16_t desc_idx, uint64_t
 
 bool virtio_queue_submit_request(virtqueue_t *queue, uint16_t desc_head)
 {
+    tiny_log(ERROR, "queue->device->base_addr : %x addr: %x\n", queue->device->base_addr, queue);
+
     if (!queue || !queue->device)
     {
         tiny_log(ERROR, "[VIRTIO] Invalid queue or device pointer\n");
@@ -777,6 +788,7 @@ bool virtio_queue_submit_request(virtqueue_t *queue, uint16_t desc_head)
 #if USE_VIRTIO_IRQ
     virtio_reset_interrupt_state();
 #endif
+    tiny_log(ERROR, "queue->device->base_addr : %x", queue->device->base_addr);
 
     // Notify device - use the device queue index
     virtio_write32(queue->device->base_addr + VIRTIO_MMIO_QUEUE_NOTIFY, queue->device_queue_idx);

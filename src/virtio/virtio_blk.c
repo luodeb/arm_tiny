@@ -13,7 +13,6 @@
 #include "config.h"
 #include "virtio/virtio_interrupt.h"
 
-static virtqueue_t *blk_queue;
 static virtio_blk_config_t blk_config;
 
 // Buffer for block operations - use same memory region as queues for physical address consistency
@@ -106,7 +105,7 @@ bool virtio_blk_init(void)
     }
 
     // Allocate a queue for this device
-    blk_queue = virtio_queue_alloc(blk_dev, 0); // Queue index 0 for block device
+    virtqueue_t *blk_queue = virtio_queue_alloc(blk_dev, 0); // Queue index 0 for block device
     if (!blk_queue)
     {
         tiny_log(ERROR, "[VIRTIO_BLK] Failed to allocate queue\n");
@@ -129,15 +128,33 @@ bool virtio_blk_init(void)
     return true;
 }
 
+bool test_split(virtqueue_t *blk_queue)
+{
+    // tiny_log(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
+    uint64_t data = blk_queue->device->base_addr;
+
+    tiny_log(ERROR, "blk_queue %x addr: %x\n", data, blk_queue);
+
+    // virtio_cache_invalidate_range(blk_queue, sizeof(blk_queue));
+    //    Submit request
+    if (!virtio_queue_submit_request(blk_queue, 0))
+    {
+        tiny_log(WARN, "[VIRTIO_BLK] Failed to submit request\n");
+        return false;
+    }
+    return true;
+}
+
 bool virtio_blk_read_sector(uint32_t sector, void *buffer)
 {
     tiny_log(DEBUG, "[VIRTIO_BLK] Reading sector %d\n", sector);
 
     virtio_device_t *blk_dev = virtio_get_blk_device();
+    virtqueue_t *blk_queue = virtio_queue_get_device_queue(blk_dev, 0);
 
     if (!blk_dev || !blk_queue)
     {
-        tiny_log(WARN, "[VIRTIO_BLK] Device not initialized\n");
+        tiny_log(WARN, "[VIRTIO_BLK] Device not initialized %x %x\n", blk_dev, blk_queue);
         return false;
     }
 
@@ -210,12 +227,8 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
         return false;
     }
 
-    tiny_log(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
-
-    // Submit request
-    if (!virtio_queue_submit_request(blk_queue, 0))
+    if (!test_split(blk_queue))
     {
-        tiny_log(WARN, "[VIRTIO_BLK] Failed to submit request\n");
         return false;
     }
 
@@ -263,12 +276,15 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     tiny_log(DEBUG, "[VIRTIO_BLK] Writing sector %d\n", sector);
 
     virtio_device_t *blk_dev = virtio_get_blk_device();
+    virtqueue_t *blk_queue = virtio_queue_get_device_queue(blk_dev, 0);
 
     if (!blk_dev || !blk_queue)
     {
         tiny_log(WARN, "[VIRTIO_BLK] Device not initialized\n");
         return false;
     }
+
+    tiny_log(ERROR, "blk_queue %x\n", blk_queue->device->base_addr);
 
     // Check device status before operation
     uint32_t device_status = virtio_read32(blk_dev->base_addr + VIRTIO_MMIO_STATUS);
@@ -335,6 +351,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     }
 
     tiny_log(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
+    tiny_log(ERROR, "blk_queue %x", blk_queue->device->base_addr);
 
     // Submit request
     if (!virtio_queue_submit_request(blk_queue, 0))
@@ -358,6 +375,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
         return false;
     }
 #endif
+    tiny_log(DEBUG, "[VIRTIO_BLK] Write completed successfully\n");
 
     // Invalidate status cache after device writes
     virtio_cache_invalidate_range((uint64_t)&blk_request->status, sizeof(blk_request->status));
