@@ -110,10 +110,36 @@ void print_char(char c);
         format_and_print_extended(fmt, args, 5);                                                                                                                  \
     } while (0)
 
-#define GET_MACRO(_0, _1, _2, _3, _4, _5, _6, NAME, ...) NAME
+#define printf_ext6(fmt, a1, a2, a3, a4, a5, a6)                                                                                                                                            \
+    do                                                                                                                                                                                      \
+    {                                                                                                                                                                                       \
+        printf_arg_t args[] = {{.ptr = (uintptr_t)(a1)}, {.ptr = (uintptr_t)(a2)}, {.ptr = (uintptr_t)(a3)}, {.ptr = (uintptr_t)(a4)}, {.ptr = (uintptr_t)(a5)}, {.ptr = (uintptr_t)(a6)}}; \
+        format_and_print_extended(fmt, args, 6);                                                                                                                                            \
+    } while (0)
+
+#define printf_ext7(fmt, a1, a2, a3, a4, a5, a6, a7)                                                                                                                                                                  \
+    do                                                                                                                                                                                                                \
+    {                                                                                                                                                                                                                 \
+        printf_arg_t args[] = {{.ptr = (uintptr_t)(a1)}, {.ptr = (uintptr_t)(a2)}, {.ptr = (uintptr_t)(a3)}, {.ptr = (uintptr_t)(a4)}, {.ptr = (uintptr_t)(a5)}, {.ptr = (uintptr_t)(a6)}, {.ptr = (uintptr_t)(a7)}}; \
+        format_and_print_extended(fmt, args, 7);                                                                                                                                                                      \
+    } while (0)
+#define printf_ext8(fmt, a1, a2, a3, a4, a5, a6, a7, a8)                                                                                                                                                                                        \
+    do                                                                                                                                                                                                                                          \
+    {                                                                                                                                                                                                                                           \
+        printf_arg_t args[] = {{.ptr = (uintptr_t)(a1)}, {.ptr = (uintptr_t)(a2)}, {.ptr = (uintptr_t)(a3)}, {.ptr = (uintptr_t)(a4)}, {.ptr = (uintptr_t)(a5)}, {.ptr = (uintptr_t)(a6)}, {.ptr = (uintptr_t)(a7)}, {.ptr = (uintptr_t)(a8)}}; \
+        format_and_print_extended(fmt, args, 8);                                                                                                                                                                                                \
+    } while (0)
+#define printf_ext9(fmt, a1, a2, a3, a4, a5, a6, a7, a8, a9)                                                                                                                                                                                                              \
+    do                                                                                                                                                                                                                                                                    \
+    {                                                                                                                                                                                                                                                                     \
+        printf_arg_t args[] = {{.ptr = (uintptr_t)(a1)}, {.ptr = (uintptr_t)(a2)}, {.ptr = (uintptr_t)(a3)}, {.ptr = (uintptr_t)(a4)}, {.ptr = (uintptr_t)(a5)}, {.ptr = (uintptr_t)(a6)}, {.ptr = (uintptr_t)(a7)}, {.ptr = (uintptr_t)(a8)}, {.ptr = (uintptr_t)(a9)}}; \
+        format_and_print_extended(fmt, args, 9);                                                                                                                                                                                                                          \
+    } while (0)
+
+#define GET_MACRO(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, NAME, ...) NAME
 
 #define printf_ext(...) GET_MACRO(_0, ##__VA_ARGS__, \
-                                  printf_ext5, printf_ext4, printf_ext3, printf_ext2, printf_ext1, printf_ext0)(__VA_ARGS__)
+                                  printf_ext8, printf_ext7, printf_ext6, printf_ext5, printf_ext4, printf_ext3, printf_ext2, printf_ext1, printf_ext0)(__VA_ARGS__)
 
 #define tiny_log_base(level, format, ...)  \
     do                                     \
