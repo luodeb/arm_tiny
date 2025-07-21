@@ -93,14 +93,28 @@ bool virtio_blk_init(void)
                     blk_config.blk_size);
     }
 
-    // Initialize queue
-    if (!virtio_queue_init(blk_dev, 0))
+    // Initialize queue manager if not already done
+    if (!virtio_queue_manager_init())
     {
-        tiny_printf(WARN, "[VIRTIO_BLK] Queue initialization FAILED\n");
+        tiny_printf(ERROR, "[VIRTIO_BLK] Failed to initialize queue manager\n");
         return false;
     }
 
-    blk_queue = virtio_get_queue();
+    // Allocate a queue for this device
+    blk_queue = virtio_queue_alloc(blk_dev, 0); // Queue index 0 for block device
+    if (!blk_queue)
+    {
+        tiny_printf(ERROR, "[VIRTIO_BLK] Failed to allocate queue\n");
+        return false;
+    }
+
+    // Initialize the allocated queue
+    if (!virtio_queue_init(blk_queue))
+    {
+        tiny_printf(WARN, "[VIRTIO_BLK] Queue initialization FAILED\n");
+        virtio_queue_free(blk_queue);
+        return false;
+    }
 
     // Set driver OK to complete initialization
     virtio_set_status(blk_dev, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER |
@@ -165,7 +179,7 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
 
     // Setup descriptors
     // Descriptor 0: Request header (device read)
-    if (!virtio_queue_add_descriptor(0, (uint64_t)&blk_request->header,
+    if (!virtio_queue_add_descriptor(blk_queue, 0, (uint64_t)&blk_request->header,
                                      sizeof(virtio_blk_req_header_t), VIRTQ_DESC_F_NEXT, 1))
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Failed to add header descriptor\n");
@@ -173,7 +187,7 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     }
 
     // Descriptor 1: Data buffer (device write)
-    if (!virtio_queue_add_descriptor(1, (uint64_t)sector_buffer,
+    if (!virtio_queue_add_descriptor(blk_queue, 1, (uint64_t)sector_buffer,
                                      VIRTIO_BLK_SECTOR_SIZE,
                                      VIRTQ_DESC_F_WRITE | VIRTQ_DESC_F_NEXT, 2))
     {
@@ -182,7 +196,7 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     }
 
     // Descriptor 2: Status byte (device write)
-    if (!virtio_queue_add_descriptor(2, (uint64_t)&blk_request->status,
+    if (!virtio_queue_add_descriptor(blk_queue, 2, (uint64_t)&blk_request->status,
                                      1, VIRTQ_DESC_F_WRITE, 0))
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Failed to add status descriptor\n");
@@ -192,7 +206,7 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     tiny_printf(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
 
     // Submit request
-    if (!virtio_queue_submit_request(0, 0))
+    if (!virtio_queue_submit_request(blk_queue, 0))
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Failed to submit request\n");
         return false;
@@ -207,7 +221,7 @@ bool virtio_blk_read_sector(uint32_t sector, void *buffer)
     }
 #else
     // Polling mode - wait for completion
-    if (!virtio_queue_wait_for_completion())
+    if (!virtio_queue_wait_for_completion(blk_queue))
     {
         tiny_printf(ERROR, "[VIRTIO_BLK] Request timeout\n");
         return false;
@@ -288,7 +302,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
 
     // Setup descriptors
     // Descriptor 0: Request header (device read)
-    if (!virtio_queue_add_descriptor(0, (uint64_t)&blk_request->header,
+    if (!virtio_queue_add_descriptor(blk_queue, 0, (uint64_t)&blk_request->header,
                                      sizeof(virtio_blk_req_header_t), VIRTQ_DESC_F_NEXT, 1))
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Failed to add header descriptor\n");
@@ -296,7 +310,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     }
 
     // Descriptor 1: Data buffer (device read for write operation)
-    if (!virtio_queue_add_descriptor(1, (uint64_t)sector_buffer,
+    if (!virtio_queue_add_descriptor(blk_queue, 1, (uint64_t)sector_buffer,
                                      VIRTIO_BLK_SECTOR_SIZE, VIRTQ_DESC_F_NEXT, 2))
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Failed to add data descriptor\n");
@@ -304,7 +318,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     }
 
     // Descriptor 2: Status byte (device write)
-    if (!virtio_queue_add_descriptor(2, (uint64_t)&blk_request->status,
+    if (!virtio_queue_add_descriptor(blk_queue, 2, (uint64_t)&blk_request->status,
                                      1, VIRTQ_DESC_F_WRITE, 0))
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Failed to add status descriptor\n");
@@ -314,7 +328,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     tiny_printf(DEBUG, "[VIRTIO_BLK] Descriptors configured\n");
 
     // Submit request
-    if (!virtio_queue_submit_request(0, 0))
+    if (!virtio_queue_submit_request(blk_queue, 0))
     {
         tiny_printf(WARN, "[VIRTIO_BLK] Failed to submit request\n");
         return false;
@@ -329,7 +343,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
     }
 #else
     // Polling mode - wait for completion
-    if (!virtio_queue_wait_for_completion())
+    if (!virtio_queue_wait_for_completion(blk_queue))
     {
         tiny_printf(ERROR, "[VIRTIO_BLK] Request timeout\n");
         return false;

@@ -55,7 +55,8 @@ void virtio_cache_invalidate_range(uint64_t start, uint32_t size)
 }
 
 static virtio_device_t virtio_dev;
-static virtqueue_t virtio_queue;
+static virtio_queue_manager_t queue_manager;
+static bool queue_manager_initialized = false;
 
 // Helper function to display VirtIO features
 static void virtio_display_features(uint64_t features, const char *prefix)
@@ -295,9 +296,168 @@ void virtio_set_status(virtio_device_t *dev, uint8_t status)
     tiny_printf(DEBUG, "[VIRTIO] Status readback: 0x%x\n", current_status);
 }
 
-bool virtio_queue_init(virtio_device_t *dev, uint32_t queue_idx)
+// Multi-queue management functions
+bool virtio_queue_manager_init(void)
 {
-    tiny_printf(INFO, "[VIRTIO] Initializing queue %d\n", queue_idx);
+    if (queue_manager_initialized)
+    {
+        tiny_printf(DEBUG, "[VIRTIO] Queue manager already initialized\n");
+        return true;
+    }
+
+    // Initialize all queues as free
+    for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
+    {
+        queue_manager.queues[i].in_use = false;
+        queue_manager.queues[i].queue_id = 0;
+        queue_manager.queues[i].device = NULL;
+    }
+
+    queue_manager.next_queue_id = 1; // Start from 1, 0 is invalid
+    queue_manager.allocated_count = 0;
+    queue_manager_initialized = true;
+
+    tiny_printf(INFO, "[VIRTIO] Queue manager initialized (max queues: %d)\n", VIRTIO_MAX_TOTAL_QUEUES);
+    return true;
+}
+
+virtqueue_t *virtio_queue_alloc(virtio_device_t *dev, uint32_t device_queue_idx)
+{
+    if (!queue_manager_initialized)
+    {
+        if (!virtio_queue_manager_init())
+        {
+            tiny_printf(ERROR, "[VIRTIO] Failed to initialize queue manager\n");
+            return NULL;
+        }
+    }
+
+    if (!dev)
+    {
+        tiny_printf(ERROR, "[VIRTIO] Invalid device pointer\n");
+        return NULL;
+    }
+
+    if (queue_manager.allocated_count >= VIRTIO_MAX_TOTAL_QUEUES)
+    {
+        tiny_printf(ERROR, "[VIRTIO] No free queues available (max: %d)\n", VIRTIO_MAX_TOTAL_QUEUES);
+        return NULL;
+    }
+
+    // Find a free queue slot
+    for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
+    {
+        if (!queue_manager.queues[i].in_use)
+        {
+            virtqueue_t *queue = &queue_manager.queues[i];
+
+            // Initialize queue structure
+            queue->queue_id = queue_manager.next_queue_id++;
+            queue->device_queue_idx = device_queue_idx;
+            queue->device = dev;
+            queue->in_use = true;
+            queue->last_used_idx = 0;
+            queue->queue_size = 0; // Will be set during initialization
+
+            queue_manager.allocated_count++;
+
+            tiny_printf(INFO, "[VIRTIO] Allocated queue ID %d for device queue %d (slot %d)\n",
+                        queue->queue_id, device_queue_idx, i);
+
+            return queue;
+        }
+    }
+
+    tiny_printf(ERROR, "[VIRTIO] Failed to find free queue slot\n");
+    return NULL;
+}
+
+void virtio_queue_free(virtqueue_t *queue)
+{
+    if (!queue || !queue->in_use)
+    {
+        tiny_printf(WARN, "[VIRTIO] Attempt to free invalid or already free queue\n");
+        return;
+    }
+
+    tiny_printf(INFO, "[VIRTIO] Freeing queue ID %d\n", queue->queue_id);
+
+    // Clear queue structure
+    queue->in_use = false;
+    queue->queue_id = 0;
+    queue->device = NULL;
+    queue->desc = NULL;
+    queue->avail = NULL;
+    queue->used = NULL;
+
+    queue_manager.allocated_count--;
+}
+
+virtqueue_t *virtio_queue_get_by_id(uint32_t queue_id)
+{
+    if (!queue_manager_initialized || queue_id == 0)
+    {
+        return NULL;
+    }
+
+    for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
+    {
+        if (queue_manager.queues[i].in_use && queue_manager.queues[i].queue_id == queue_id)
+        {
+            return &queue_manager.queues[i];
+        }
+    }
+
+    return NULL;
+}
+
+virtqueue_t *virtio_queue_get_device_queue(virtio_device_t *dev, uint32_t device_queue_idx)
+{
+    if (!queue_manager_initialized || !dev)
+    {
+        return NULL;
+    }
+
+    for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
+    {
+        if (queue_manager.queues[i].in_use &&
+            queue_manager.queues[i].device == dev &&
+            queue_manager.queues[i].device_queue_idx == device_queue_idx)
+        {
+            return &queue_manager.queues[i];
+        }
+    }
+
+    return NULL;
+}
+
+// Legacy queue initialization function - now takes device and queue index
+bool virtio_queue_init_legacy(virtio_device_t *dev, uint32_t queue_idx)
+{
+    // Allocate a new queue for this device
+    virtqueue_t *queue = virtio_queue_alloc(dev, queue_idx);
+    if (!queue)
+    {
+        tiny_printf(ERROR, "[VIRTIO] Failed to allocate queue for device queue %d\n", queue_idx);
+        return false;
+    }
+
+    // Initialize the queue
+    return virtio_queue_init(queue);
+}
+
+bool virtio_queue_init(virtqueue_t *queue)
+{
+    if (!queue || !queue->device)
+    {
+        tiny_printf(ERROR, "[VIRTIO] Invalid queue or device pointer\n");
+        return false;
+    }
+
+    virtio_device_t *dev = queue->device;
+    uint32_t queue_idx = queue->device_queue_idx;
+
+    tiny_printf(INFO, "[VIRTIO] Initializing queue ID %d (device queue %d)\n", queue->queue_id, queue_idx);
 
     // Select queue
     virtio_write32(dev->base_addr + VIRTIO_MMIO_QUEUE_SEL, queue_idx);
@@ -332,7 +492,8 @@ bool virtio_queue_init(virtio_device_t *dev, uint32_t queue_idx)
     uint64_t used_size = 6 + (queue_size * 2);              // 6 + queue_size * 2
 
     // Memory layout depends on VirtIO version
-    uint64_t base_addr = 0x45000000; // 4KB-aligned base address
+    // Allocate unique memory region for each queue to avoid conflicts
+    uint64_t base_addr = 0x45000000 + (queue->queue_id * 0x10000); // 64KB per queue
     uint64_t desc_addr, avail_addr, used_addr;
 
     if (dev->version >= 2)
@@ -493,17 +654,17 @@ bool virtio_queue_init(virtio_device_t *dev, uint32_t queue_idx)
     }
 
     // Initialize queue structure - let device calculate the actual layout according to VirtIO spec
-    virtio_queue.queue_size = queue_size;
-    virtio_queue.desc_table_addr = base_addr; // Descriptor table starts at PFN address
+    queue->queue_size = queue_size;
+    queue->desc_table_addr = base_addr; // Descriptor table starts at PFN address
 
-    virtio_queue.avail_ring_addr = avail_addr;
-    virtio_queue.used_ring_addr = used_addr;
-    virtio_queue.last_used_idx = 0;
+    queue->avail_ring_addr = avail_addr;
+    queue->used_ring_addr = used_addr;
+    queue->last_used_idx = 0;
 
     // Set up pointers to device-calculated addresses
-    virtio_queue.desc = (virtq_desc_t *)base_addr;
-    virtio_queue.avail = (virtq_avail_t *)avail_addr;
-    virtio_queue.used = (virtq_used_t *)used_addr;
+    queue->desc = (virtq_desc_t *)base_addr;
+    queue->avail = (virtq_avail_t *)avail_addr;
+    queue->used = (virtq_used_t *)used_addr;
 
     tiny_printf(INFO, "[VIRTIO] Device-calculated addresses - Desc: 0x%x, Avail: 0x%x, Used: 0x%x\n",
                 (uint32_t)base_addr, (uint32_t)avail_addr, (uint32_t)used_addr);
@@ -519,18 +680,18 @@ bool virtio_queue_init(virtio_device_t *dev, uint32_t queue_idx)
     // CRITICAL: Set VIRTQ_AVAIL_F_NO_INTERRUPT flag to enable polling mode
     // This tells the device NOT to use interrupts and allows pure polling
 #if USE_VIRTIO_IRQ
-    virtio_queue.avail->flags &= ~VIRTQ_AVAIL_F_NO_INTERRUPT; // Clear any previous flags
+    queue->avail->flags &= ~VIRTQ_AVAIL_F_NO_INTERRUPT; // Clear any previous flags
 #else
-    virtio_queue.avail->flags |= VIRTQ_AVAIL_F_NO_INTERRUPT;
+    queue->avail->flags |= VIRTQ_AVAIL_F_NO_INTERRUPT;
 #endif
     tiny_printf(INFO, "[VIRTIO] Set avail->flags = 0x%x for polling mode\n",
-                virtio_queue.avail->flags);
+                queue->avail->flags);
 
     // Ensure the flag setting is visible to the device
-    virtio_cache_clean_range((uint64_t)virtio_queue.avail, sizeof(virtq_avail_t));
+    virtio_cache_clean_range((uint64_t)queue->avail, sizeof(virtq_avail_t));
     __asm__ volatile("dmb sy" ::: "memory");
 
-    tiny_printf(INFO, "[VIRTIO] Queue %d initialization SUCCESSFUL (polling mode enabled)\n", queue_idx);
+    tiny_printf(INFO, "[VIRTIO] Queue ID %d initialization SUCCESSFUL (polling mode enabled)\n", queue->queue_id);
     return true;
 }
 
@@ -539,48 +700,87 @@ virtio_device_t *virtio_get_device(void)
     return &virtio_dev;
 }
 
+// Legacy compatibility function - returns first allocated queue
 virtqueue_t *virtio_get_queue(void)
 {
-    return &virtio_queue;
+    if (!queue_manager_initialized)
+    {
+        return NULL;
+    }
+
+    // Return the first allocated queue for backward compatibility
+    for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
+    {
+        if (queue_manager.queues[i].in_use)
+        {
+            return &queue_manager.queues[i];
+        }
+    }
+
+    return NULL;
 }
 
-// Queue management functions
-bool virtio_queue_add_descriptor(uint16_t desc_idx, uint64_t addr, uint32_t len, uint16_t flags, uint16_t next)
+// New queue management functions that take queue pointer
+bool virtio_queue_add_descriptor(virtqueue_t *queue, uint16_t desc_idx, uint64_t addr, uint32_t len, uint16_t flags, uint16_t next)
 {
-    if (desc_idx >= virtio_queue.queue_size)
+    if (!queue)
+    {
+        tiny_printf(ERROR, "[VIRTIO] Invalid queue pointer\n");
+        return false;
+    }
+
+    if (desc_idx >= queue->queue_size)
     {
         tiny_printf(WARN, "[VIRTIO] Invalid descriptor index: %d\n", desc_idx);
         return false;
     }
 
-    virtio_queue.desc[desc_idx].addr = addr;
-    virtio_queue.desc[desc_idx].len = len;
-    virtio_queue.desc[desc_idx].flags = flags;
-    virtio_queue.desc[desc_idx].next = next;
+    queue->desc[desc_idx].addr = addr;
+    queue->desc[desc_idx].len = len;
+    queue->desc[desc_idx].flags = flags;
+    queue->desc[desc_idx].next = next;
 
-    tiny_printf(DEBUG, "[VIRTIO] Added descriptor %d: addr=0x%x, len=%d, flags=0x%x\n",
-                desc_idx, (uint32_t)addr, len, flags);
+    tiny_printf(DEBUG, "[VIRTIO] Queue %d: Added descriptor %d: addr=0x%x, len=%d, flags=0x%x\n",
+                queue->queue_id, desc_idx, (uint32_t)addr, len, flags);
 
     return true;
 }
 
-bool virtio_queue_submit_request(uint16_t desc_head, uint32_t queue_idx)
+// Legacy wrapper function for backward compatibility
+bool virtio_queue_add_descriptor_legacy(uint16_t desc_idx, uint64_t addr, uint32_t len, uint16_t flags, uint16_t next)
 {
+    virtqueue_t *queue = virtio_get_queue();
+    if (!queue)
+    {
+        tiny_printf(ERROR, "[VIRTIO] No queue available for legacy operation\n");
+        return false;
+    }
+    return virtio_queue_add_descriptor(queue, desc_idx, addr, len, flags, next);
+}
+
+bool virtio_queue_submit_request(virtqueue_t *queue, uint16_t desc_head)
+{
+    if (!queue || !queue->device)
+    {
+        tiny_printf(ERROR, "[VIRTIO] Invalid queue or device pointer\n");
+        return false;
+    }
+
     // Cache management: Clean descriptor table and data buffers before submission
-    virtio_cache_clean_range((uint64_t)virtio_queue.desc,
-                             virtio_queue.queue_size * sizeof(virtq_desc_t));
+    virtio_cache_clean_range((uint64_t)queue->desc,
+                             queue->queue_size * sizeof(virtq_desc_t));
 
     // Clean the specific descriptors in the chain
     uint16_t current_desc = desc_head;
-    while (current_desc < virtio_queue.queue_size)
+    while (current_desc < queue->queue_size)
     {
-        virtq_desc_t *desc = &virtio_queue.desc[current_desc];
+        virtq_desc_t *desc = &queue->desc[current_desc];
 
         // Clean the data buffer pointed to by this descriptor
         virtio_cache_clean_range(desc->addr, desc->len);
 
-        tiny_printf(DEBUG, "[VIRTIO] Cleaned descriptor %d buffer: addr=0x%x, len=%d\n",
-                    current_desc, (uint32_t)desc->addr, desc->len);
+        tiny_printf(DEBUG, "[VIRTIO] Queue %d: Cleaned descriptor %d buffer: addr=0x%x, len=%d\n",
+                    queue->queue_id, current_desc, (uint32_t)desc->addr, desc->len);
 
         if (!(desc->flags & VIRTQ_DESC_F_NEXT))
         {
@@ -590,56 +790,75 @@ bool virtio_queue_submit_request(uint16_t desc_head, uint32_t queue_idx)
     }
 
     // Add to available ring
-    uint16_t avail_idx = virtio_queue.avail->idx;
-    virtio_queue.avail->ring[avail_idx % virtio_queue.queue_size] = desc_head;
+    uint16_t avail_idx = queue->avail->idx;
+    queue->avail->ring[avail_idx % queue->queue_size] = desc_head;
 
 #if USE_VIRTIO_IRQ
-    virtio_queue.avail->flags &= ~VIRTQ_AVAIL_F_NO_INTERRUPT; // Clear any previous flags
+    queue->avail->flags &= ~VIRTQ_AVAIL_F_NO_INTERRUPT; // Clear any previous flags
 #else
-    virtio_queue.avail->flags |= VIRTQ_AVAIL_F_NO_INTERRUPT;
+    queue->avail->flags |= VIRTQ_AVAIL_F_NO_INTERRUPT;
 #endif
-    tiny_printf(INFO, "[VIRTIO] Set avail->flags = 0x%x for polling mode\n",
-                virtio_queue.avail->flags);
+    tiny_printf(INFO, "[VIRTIO] Queue %d: Set avail->flags = 0x%x for polling mode\n",
+                queue->queue_id, queue->avail->flags);
 
     // Memory barrier - critical for ARM architecture
     __asm__ volatile("dmb sy" ::: "memory");
 
     // Update available index
-    virtio_queue.avail->idx = avail_idx + 1;
+    queue->avail->idx = avail_idx + 1;
 
-    tiny_printf(DEBUG, "[VIRTIO] Request queued: desc_head=%d, avail_idx=%d->%d, flags=0x%x\n",
-                desc_head, avail_idx, avail_idx + 1, virtio_queue.avail->flags);
+    tiny_printf(DEBUG, "[VIRTIO] Queue %d: Request queued: desc_head=%d, avail_idx=%d->%d, flags=0x%x\n",
+                queue->queue_id, desc_head, avail_idx, avail_idx + 1, queue->avail->flags);
 
     // Clean available ring to ensure device can see the update
-    virtio_cache_clean_range((uint64_t)virtio_queue.avail,
-                             sizeof(virtq_avail_t) + virtio_queue.queue_size * sizeof(uint16_t));
+    virtio_cache_clean_range((uint64_t)queue->avail,
+                             sizeof(virtq_avail_t) + queue->queue_size * sizeof(uint16_t));
 
     // Another memory barrier to ensure index update is visible
     __asm__ volatile("dmb sy" ::: "memory");
 
-    tiny_printf(DEBUG, "[VIRTIO] Submitted request: desc_head=%d, avail_idx=%d\n",
-                desc_head, avail_idx);
+    tiny_printf(DEBUG, "[VIRTIO] Queue %d: Submitted request: desc_head=%d, avail_idx=%d\n",
+                queue->queue_id, desc_head, avail_idx);
 
 #if USE_VIRTIO_IRQ
     virtio_reset_interrupt_state();
 #endif
 
-    // Notify device - use the provided queue index
-    virtio_write32(virtio_dev.base_addr + VIRTIO_MMIO_QUEUE_NOTIFY, queue_idx);
+    // Notify device - use the device queue index
+    virtio_write32(queue->device->base_addr + VIRTIO_MMIO_QUEUE_NOTIFY, queue->device_queue_idx);
 
     // CRITICAL: Add strong memory barriers after device notification
     __asm__ volatile("dmb sy" ::: "memory"); // Data memory barrier
     __asm__ volatile("dsb sy" ::: "memory"); // Data synchronization barrier
     __asm__ volatile("isb" ::: "memory");    // Instruction synchronization barrier
 
-    tiny_printf(DEBUG, "[VIRTIO] Device notified with queue index %d\n", queue_idx);
+    tiny_printf(DEBUG, "[VIRTIO] Queue %d: Device notified with queue index %d\n",
+                queue->queue_id, queue->device_queue_idx);
 
     return true;
 }
 
-bool virtio_queue_wait_for_completion(void)
+// Legacy wrapper function for backward compatibility
+bool virtio_queue_submit_request_legacy(uint16_t desc_head, uint32_t queue_idx)
 {
-    tiny_printf(DEBUG, "[VIRTIO] Starting wait loop...\n");
+    virtqueue_t *queue = virtio_get_queue();
+    if (!queue)
+    {
+        tiny_printf(ERROR, "[VIRTIO] No queue available for legacy operation\n");
+        return false;
+    }
+    return virtio_queue_submit_request(queue, desc_head);
+}
+
+bool virtio_queue_wait_for_completion(virtqueue_t *queue)
+{
+    if (!queue)
+    {
+        tiny_printf(ERROR, "[VIRTIO] Invalid queue pointer\n");
+        return false;
+    }
+
+    tiny_printf(DEBUG, "[VIRTIO] Queue %d: Starting wait loop...\n", queue->queue_id);
 
     uint32_t timeout = 1000000; // Timeout counter
     uint32_t debug_counter = 0;
@@ -647,38 +866,38 @@ bool virtio_queue_wait_for_completion(void)
     while (timeout > 0)
     {
         // Invalidate used ring cache before checking for updates
-        virtio_cache_invalidate_range((uint64_t)virtio_queue.used,
-                                      sizeof(virtq_used_t) + virtio_queue.queue_size * sizeof(virtq_used_elem_t));
+        virtio_cache_invalidate_range((uint64_t)queue->used,
+                                      sizeof(virtq_used_t) + queue->queue_size * sizeof(virtq_used_elem_t));
 
         // Safe access to used index
-        volatile uint16_t used_idx = virtio_queue.used->idx;
+        volatile uint16_t used_idx = queue->used->idx;
 
         // Periodic debug output
         if (debug_counter % 100000 == 0)
         {
-            tiny_printf(DEBUG, "[VIRTIO] Checking... used_idx=%d, last_used_idx=%d, timeout=%d\n",
-                        used_idx, virtio_queue.last_used_idx, timeout);
+            tiny_printf(DEBUG, "[VIRTIO] Queue %d: Checking... used_idx=%d, last_used_idx=%d, timeout=%d\n",
+                        queue->queue_id, used_idx, queue->last_used_idx, timeout);
         }
 
-        if (used_idx != virtio_queue.last_used_idx)
+        if (used_idx != queue->last_used_idx)
         {
-            tiny_printf(DEBUG, "[VIRTIO] Request completed: used_idx=%d, last_used_idx=%d\n",
-                        used_idx, virtio_queue.last_used_idx);
+            tiny_printf(DEBUG, "[VIRTIO] Queue %d: Request completed: used_idx=%d, last_used_idx=%d\n",
+                        queue->queue_id, used_idx, queue->last_used_idx);
 
             // Process completed requests safely
-            while (virtio_queue.last_used_idx != used_idx)
+            while (queue->last_used_idx != used_idx)
             {
-                uint16_t used_ring_idx = virtio_queue.last_used_idx % virtio_queue.queue_size;
+                uint16_t used_ring_idx = queue->last_used_idx % queue->queue_size;
 
                 // Safe access to used ring element
-                volatile virtq_used_elem_t *used_elem = &virtio_queue.used->ring[used_ring_idx];
+                volatile virtq_used_elem_t *used_elem = &queue->used->ring[used_ring_idx];
                 uint32_t elem_id = used_elem->id;
                 uint32_t elem_len = used_elem->len;
 
-                tiny_printf(DEBUG, "[VIRTIO] Completed descriptor %d, length %d\n",
-                            elem_id, elem_len);
+                tiny_printf(DEBUG, "[VIRTIO] Queue %d: Completed descriptor %d, length %d\n",
+                            queue->queue_id, elem_id, elem_len);
 
-                virtio_queue.last_used_idx++;
+                queue->last_used_idx++;
             }
 
             return true;
@@ -691,8 +910,20 @@ bool virtio_queue_wait_for_completion(void)
             ;
     }
 
-    tiny_printf(WARN, "[VIRTIO] Request timeout\n");
+    tiny_printf(WARN, "[VIRTIO] Queue %d: Request timeout\n", queue->queue_id);
     return false;
+}
+
+// Legacy wrapper function for backward compatibility
+bool virtio_queue_wait_for_completion_legacy(void)
+{
+    virtqueue_t *queue = virtio_get_queue();
+    if (!queue)
+    {
+        tiny_printf(ERROR, "[VIRTIO] No queue available for legacy operation\n");
+        return false;
+    }
+    return virtio_queue_wait_for_completion(queue);
 }
 
 uint64_t virtio_scan_devices(uint32_t target_device_id)

@@ -12,6 +12,7 @@
 #include "virtio/fat32.h"
 #include "virtio/virtio_debug.h"
 #include "virtio/virtio_interrupt.h"
+#include "virtio/virtio_multiqueue_test.h"
 #include "config.h"
 
 #ifndef VM_VERSION
@@ -72,6 +73,15 @@ int kernel_main(void)
         goto error_exit;
     }
 
+    // Test 1.5: Multi-Queue Functionality Test
+    tiny_printf(INFO, "=== Testing VirtIO Multi-Queue Functionality ===\n");
+    if (!virtio_test_multiqueue_functionality())
+    {
+        tiny_printf(WARN, "Multi-queue tests FAILED\n");
+        goto error_exit;
+    }
+    tiny_printf(INFO, "Multi-queue tests PASSED\n");
+
     // Test 2: Initialize VirtIO and test basic access
     tiny_printf(INFO, "=== Testing VirtIO Initialization ===\n");
     if (!virtio_blk_init())
@@ -118,23 +128,23 @@ int kernel_main(void)
     tiny_printf(INFO, "FAT32 file system initialized successfully\n");
 
     // Test 7: File Writing Test
-    // tiny_printf(INFO, "=== Testing File Writing ===\n");
-    // const char *test_data = "Hello, this is a test file created by the FAT32 implementation!\nThis file contains multiple lines.\nLine 3 of the test file.";
-    // if (!fat32_write_file("test.txt", test_data, my_strlen(test_data)))
-    // {
-    //     tiny_printf(WARN, "Failed to write test.txt file\n");
-    // }
-    // else
-    // {
-    //     tiny_printf(INFO, "Successfully wrote test.txt file\n");
-    // }
+    tiny_printf(INFO, "=== Testing File Writing ===\n");
+    const char *test_data = "Hello, this is a test file created by the FAT32 implementation!\nThis file contains multiple lines.\nLine 10086 of the test file.";
+    if (!fat32_write_file("hello.txt", test_data, my_strlen(test_data)))
+    {
+        tiny_printf(WARN, "Failed to write test.txt file\n");
+    }
+    else
+    {
+        tiny_printf(INFO, "Successfully wrote test.txt file\n");
+    }
 
     // Test 8: File Reading Test
     tiny_printf(INFO, "=== Testing File Reading ===\n");
     char file_content[512];
-    if (!fat32_read_file("test.txt", file_content, 511))
+    if (!fat32_read_file("hello.txt", file_content, 511))
     {
-        tiny_printf(WARN, "Failed to read test.txt file\n");
+        tiny_printf(WARN, "Failed to read hello.txt file\n");
     }
     else
     {

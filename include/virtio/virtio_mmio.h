@@ -3,6 +3,15 @@
 
 #include "tiny_types.h"
 
+// NULL definition if not already defined
+#ifndef NULL
+#define NULL ((void *)0)
+#endif
+
+// Maximum number of queues per device and total system queues
+#define VIRTIO_MAX_QUEUES_PER_DEVICE 8
+#define VIRTIO_MAX_TOTAL_QUEUES 32
+
 // VirtIO MMIO register offsets
 #define VIRTIO_MMIO_MAGIC 0x000
 #define VIRTIO_MMIO_VERSION 0x004
@@ -120,6 +129,8 @@ typedef struct
 // VirtIO queue structure
 typedef struct
 {
+    uint32_t queue_id;         // Unique queue identifier
+    uint32_t device_queue_idx; // Queue index within the device (0, 1, 2, ...)
     uint32_t queue_size;
     uint64_t desc_table_addr;
     uint64_t avail_ring_addr;
@@ -128,21 +139,42 @@ typedef struct
     virtq_desc_t *desc;
     virtq_avail_t *avail;
     virtq_used_t *used;
+    bool in_use;             // Whether this queue is currently allocated
+    virtio_device_t *device; // Pointer to the device this queue belongs to
 } virtqueue_t;
+
+// Queue manager structure
+typedef struct
+{
+    virtqueue_t queues[VIRTIO_MAX_TOTAL_QUEUES];
+    uint32_t next_queue_id;
+    uint32_t allocated_count;
+} virtio_queue_manager_t;
 
 // Function declarations
 bool virtio_probe_device(uint64_t base_addr);
 bool virtio_device_init(virtio_device_t *dev, uint64_t base_addr);
-bool virtio_queue_init(virtio_device_t *dev, uint32_t queue_idx);
 void virtio_set_status(virtio_device_t *dev, uint8_t status);
 uint32_t virtio_read32(uint64_t addr);
 void virtio_write32(uint64_t addr, uint32_t value);
 virtio_device_t *virtio_get_device(void);
-virtqueue_t *virtio_get_queue(void);
-bool virtio_queue_add_descriptor(uint16_t desc_idx, uint64_t addr, uint32_t len, uint16_t flags, uint16_t next);
-bool virtio_queue_submit_request(uint16_t desc_head, uint32_t queue_idx);
-bool virtio_queue_wait_for_completion(void);
 uint64_t virtio_scan_devices(uint32_t target_device_id);
+
+// Multi-queue management functions
+bool virtio_queue_manager_init(void);
+virtqueue_t *virtio_queue_alloc(virtio_device_t *dev, uint32_t device_queue_idx);
+bool virtio_queue_init(virtqueue_t *queue);
+void virtio_queue_free(virtqueue_t *queue);
+virtqueue_t *virtio_queue_get_by_id(uint32_t queue_id);
+virtqueue_t *virtio_queue_get_device_queue(virtio_device_t *dev, uint32_t device_queue_idx);
+
+// Queue operation functions (now take queue pointer)
+bool virtio_queue_add_descriptor(virtqueue_t *queue, uint16_t desc_idx, uint64_t addr, uint32_t len, uint16_t flags, uint16_t next);
+bool virtio_queue_submit_request(virtqueue_t *queue, uint16_t desc_head);
+bool virtio_queue_wait_for_completion(virtqueue_t *queue);
+
+// Legacy compatibility functions (deprecated)
+virtqueue_t *virtio_get_queue(void); // Returns first allocated queue for backward compatibility
 
 // Cache management functions for DMA coherency
 void virtio_cache_clean_range(uint64_t start, uint32_t size);
