@@ -23,14 +23,11 @@ bool virtio_test_multiqueue_allocation(void)
         tiny_log(ERROR, "[VIRTIO_TEST] Failed to initialize queue manager\n");
         return false;
     }
-
+    tiny_log(INFO, "[VIRTIO_TEST] === Multi-Queue Allocation Test ===\n");
     // Create a mock device for testing
     virtio_device_t test_dev;
-    tiny_log(INFO, "[VIRTIO_TEST] === Multi-Queue Allocation Test ===\n");
     test_dev.base_addr = 0x0a000000;
-    tiny_log(INFO, "[VIRTIO_TEST] === Multi-Queue Allocation Test ===\n");
     test_dev.device_id = VIRTIO_DEVICE_ID_BLOCK;
-    tiny_log(INFO, "[VIRTIO_TEST] === Multi-Queue Allocation Test ===\n");
     test_dev.version = 2;
 
     tiny_log(INFO, "[VIRTIO_TEST] Testing queue allocation...\n");

@@ -13,6 +13,10 @@
 #include "tiny_io.h"
 #include "config.h"
 
+static virtio_queue_manager_t queue_manager;
+static bool queue_manager_initialized = false;
+static virtio_device_t virtio_dev;
+
 // ARM cache management functions for DMA coherency
 void virtio_cache_clean_range(uint64_t start, uint32_t size)
 {
@@ -53,10 +57,6 @@ void virtio_cache_invalidate_range(uint64_t start, uint32_t size)
     // Data memory barrier
     __asm__ volatile("dmb sy" ::: "memory");
 }
-
-static virtio_device_t virtio_dev;
-static virtio_queue_manager_t queue_manager;
-static bool queue_manager_initialized = false;
 
 // Helper function to display VirtIO features
 static void virtio_display_features(uint64_t features, const char *prefix)
@@ -163,6 +163,8 @@ bool virtio_device_init(virtio_device_t *dev, uint64_t base_addr)
     // Fill device structure
     dev->base_addr = base_addr;
     dev->magic = virtio_read32(base_addr + VIRTIO_MMIO_MAGIC);
+    tiny_log(ERROR, "[VIRTIO] Magic value: 0x%x\n", dev->magic);
+
     uint32_t hw_version = virtio_read32(base_addr + VIRTIO_MMIO_VERSION);
     dev->device_id = virtio_read32(base_addr + VIRTIO_MMIO_DEVICE_ID);
     dev->vendor_id = virtio_read32(base_addr + VIRTIO_MMIO_VENDOR_ID);
@@ -261,7 +263,7 @@ bool virtio_device_init(virtio_device_t *dev, uint64_t base_addr)
         virtio_write32(dev->base_addr + VIRTIO_MMIO_DRIVER_FEATURES, (uint32_t)(driver_features >> 32));
     }
 
-    tiny_log(INFO, "[VIRTIO] Driver features set to: 0x%x%08x\n",
+    tiny_log(INFO, "[VIRTIO] Driver features set to: 0x%x%x\n",
              (uint32_t)(driver_features >> 32), (uint32_t)driver_features);
 
     // Indicate that feature negotiation is complete
@@ -299,12 +301,13 @@ void virtio_set_status(virtio_device_t *dev, uint8_t status)
 // Multi-queue management functions
 bool virtio_queue_manager_init(void)
 {
+    tiny_log(INFO, "[VIRTIO] Initializing queue manager %d\n", queue_manager_initialized);
     if (queue_manager_initialized)
     {
         tiny_log(DEBUG, "[VIRTIO] Queue manager already initialized\n");
         return true;
     }
-
+    tiny_log(INFO, "[VIRTIO] Initializing queue manager %d\n", queue_manager_initialized);
     // Initialize all queues as free
     for (uint32_t i = 0; i < VIRTIO_MAX_TOTAL_QUEUES; i++)
     {
@@ -312,6 +315,7 @@ bool virtio_queue_manager_init(void)
         queue_manager.queues[i].queue_id = 0;
         queue_manager.queues[i].device = NULL;
     }
+    tiny_log(INFO, "[VIRTIO] Initializing queue manager %d\n", queue_manager_initialized);
 
     queue_manager.next_queue_id = 1; // Start from 1, 0 is invalid
     queue_manager.allocated_count = 0;
@@ -360,9 +364,6 @@ virtqueue_t *virtio_queue_alloc(virtio_device_t *dev, uint32_t device_queue_idx)
             queue->queue_size = 0; // Will be set during initialization
 
             queue_manager.allocated_count++;
-
-            tiny_log(INFO, "[VIRTIO] Allocated queue ID %d for device queue %d (slot %d)\n",
-                     queue->queue_id, device_queue_idx, i);
 
             return queue;
         }
@@ -885,9 +886,8 @@ uint64_t virtio_scan_devices(uint32_t target_device_id)
 
         // Read device ID
         uint32_t device_id = virtio_read32(base_addr + VIRTIO_MMIO_DEVICE_ID);
-        tiny_log(DEBUG, "[VIRTIO] Slot %d: Found device ID %d (magic=0x%x",
-                 slot, device_id, magic);
-        tiny_log(DEBUG, ", version=%d)\n", version);
+        tiny_log(DEBUG, "[VIRTIO] Slot %d: Found device ID %d (magic=0x%x, version=%d)\n",
+                 slot, device_id, magic, version);
 
         if (device_id == 0)
         {

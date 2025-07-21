@@ -13,7 +13,6 @@
 #include "config.h"
 #include "virtio/virtio_interrupt.h"
 
-static virtio_device_t *blk_dev;
 static virtqueue_t *blk_queue;
 static virtio_blk_config_t blk_config;
 
@@ -21,10 +20,11 @@ static virtio_blk_config_t blk_config;
 #define VIRTIO_DATA_BASE 0x45100000 // Just after queue memory
 static uint8_t *sector_buffer = (uint8_t *)(VIRTIO_DATA_BASE);
 static virtio_blk_req_t *blk_request = (virtio_blk_req_t *)(VIRTIO_DATA_BASE + VIRTIO_BLK_SECTOR_SIZE);
+static virtio_device_t blk_dev_global = {0};
 
 virtio_device_t *virtio_get_blk_device(void)
 {
-    return blk_dev;
+    return &blk_dev_global;
 }
 
 bool virtio_blk_init(void)
@@ -54,7 +54,7 @@ bool virtio_blk_init(void)
     tiny_log(INFO, "[VIRTIO_BLK] Found VirtIO Block device at 0x%x\n", (uint32_t)blk_device_addr);
 
     // Get device from MMIO layer
-    blk_dev = virtio_get_blk_device();
+    virtio_device_t *blk_dev = virtio_get_blk_device();
     if (!virtio_device_init(blk_dev, blk_device_addr))
     {
         tiny_log(WARN, "[VIRTIO_BLK] Device initialization FAILED\n");
@@ -132,6 +132,8 @@ bool virtio_blk_init(void)
 bool virtio_blk_read_sector(uint32_t sector, void *buffer)
 {
     tiny_log(DEBUG, "[VIRTIO_BLK] Reading sector %d\n", sector);
+
+    virtio_device_t *blk_dev = virtio_get_blk_device();
 
     if (!blk_dev || !blk_queue)
     {
@@ -260,6 +262,8 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
 {
     tiny_log(DEBUG, "[VIRTIO_BLK] Writing sector %d\n", sector);
 
+    virtio_device_t *blk_dev = virtio_get_blk_device();
+
     if (!blk_dev || !blk_queue)
     {
         tiny_log(WARN, "[VIRTIO_BLK] Device not initialized\n");
@@ -372,6 +376,7 @@ bool virtio_blk_write_sector(uint32_t sector, const void *buffer)
 
 uint64_t virtio_blk_get_capacity(void)
 {
+    virtio_device_t *blk_dev = virtio_get_blk_device();
     if (!blk_dev)
     {
         return 0;
