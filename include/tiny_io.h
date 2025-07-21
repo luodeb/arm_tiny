@@ -141,34 +141,35 @@ void print_char(char c);
 #define printf_ext(...) GET_MACRO(_0, ##__VA_ARGS__, \
                                   printf_ext8, printf_ext7, printf_ext6, printf_ext5, printf_ext4, printf_ext3, printf_ext2, printf_ext1, printf_ext0)(__VA_ARGS__)
 
-#define tiny_log_base(level, format, ...)  \
-    do                                     \
-    {                                      \
-        switch (level)                     \
-        {                                  \
-        case INFO:                         \
-            printf_ext("\033[32m");        \
-            break;                         \
-        case WARN:                         \
-            printf_ext("\033[33m");        \
-            break;                         \
-        case DEBUG:                        \
-            printf_ext("\033[34m");        \
-            break;                         \
-        case ERROR:                        \
-            printf_ext("\033[31m");        \
-            break;                         \
-        default:                           \
-            printf_ext("\033[0m");         \
-            break;                         \
-        }                                  \
-        printf_ext(format, ##__VA_ARGS__); \
-        printf_ext("\033[0m");             \
+#define tiny_log_base(level, file, line, format, ...) \
+    do                                                \
+    {                                                 \
+        printf_ext("[%s:%d] ", file, line);           \
+        switch (level)                                \
+        {                                             \
+        case INFO:                                    \
+            printf_ext("\033[32m");                   \
+            break;                                    \
+        case WARN:                                    \
+            printf_ext("\033[33m");                   \
+            break;                                    \
+        case DEBUG:                                   \
+            printf_ext("\033[34m");                   \
+            break;                                    \
+        case ERROR:                                   \
+            printf_ext("\033[31m");                   \
+            break;                                    \
+        default:                                      \
+            printf_ext("\033[0m");                    \
+            break;                                    \
+        }                                             \
+        printf_ext(format, ##__VA_ARGS__);            \
+        printf_ext("\033[0m");                        \
     } while (0)
 
 // 显示行号和文件名
 #define tiny_log(level, format, ...) \
-    tiny_log_base(level, "[%s:%d] " format, __FILE__, __LINE__, ##__VA_ARGS__)
+    tiny_log_base(level, __FILE__, __LINE__, format, ##__VA_ARGS__)
 
 // PSCI function IDs for system shutdown
 #define PSCI_SYSTEM_OFF 0x84000008
