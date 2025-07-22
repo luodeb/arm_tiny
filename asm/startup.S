@@ -7,6 +7,8 @@ _start:
     mov x8, #97
     mov x9, #0x09000000 //串口地址，需要变化
     str x8, [x9]
+    mov x8, #10
+    str x8, [x9]
     
     msr daifset, #2   // 关闭所有中断
 
