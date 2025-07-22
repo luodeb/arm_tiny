@@ -6,6 +6,7 @@
  */
 
 #include "tinyio.h"
+#include "tinystd.h"
 
 #ifndef VM_VERSION
 #define VM_VERSION "null"

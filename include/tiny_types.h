@@ -1,6 +1,7 @@
 
 #ifndef __TYPES_H__
 #define __TYPES_H__
+#include <stddef.h>
 
 typedef unsigned char        uint8_t;
 typedef unsigned short       uint16_t;
@@ -13,8 +14,7 @@ typedef    _Bool  bool;
 #define false 0
 #define true  1
 
-#define SIZE_MAX		(9223372036854775807UL)
-#define NULL (void *)0
+#define SIZE_MAX (9223372036854775807UL)
 
 #define MIN(a, b)		((a) < (b) ? (a) : (b))
 #define MAX(a, b)		((a) > (b) ? (a) : (b))
