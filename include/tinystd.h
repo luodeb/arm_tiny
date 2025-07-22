@@ -50,7 +50,7 @@ static inline void write64(uint64_t value, volatile void *addr)
 // ARM64 system shutdown function using PSCI
 static inline void system_shutdown(void)
 {
-    tiny_log("Shutting down system...\n");
+    tiny_warn("Shutting down system...\n");
 
     // PSCI call to shutdown the system
     __asm__ volatile(

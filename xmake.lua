@@ -5,10 +5,16 @@ set_toolset("cc", "aarch64-none-linux-gnu-gcc")
 set_toolset("as", "aarch64-none-linux-gnu-gcc")
 set_toolset("ld", "aarch64-none-linux-gnu-ld")
 
-task("hello")
+task("qemu")
     on_run(function ()
-        -- print(var.$(projectdir))
-        print("$(projectdir)")
+        import("core.project.project")
+        local target = project.target("arm_tiny")
+        local file_bin = format("%s/debug/%s.bin", target:targetdir(), target:basename())
+        local file_elf = format("%s/debug/%s.elf", target:targetdir(), target:basename())
+        local qemu_option = "-m 4G -M virt -cpu cortex-a72 -nographic"
+        local qemu_cmd = format("qemu-system-aarch64 %s -kernel %s", qemu_option, file_elf)
+        print(qemu_cmd)
+        os.exec(qemu_cmd)
     end)
 
     set_menu {}

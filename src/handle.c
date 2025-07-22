@@ -12,7 +12,7 @@ void handle_irq_exception(uint64_t *stack_pointer)
 
 void invalid_exception(uint64_t *stack_pointer, uint64_t kind, uint64_t source)
 {
-    tiny_log("Invalid exception occurred!\n");
+    tiny_error("Invalid exception occurred!\n");
     while (1)
         ;
 }

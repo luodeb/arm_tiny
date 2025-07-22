@@ -14,7 +14,7 @@
 
 int kernel_main(void)
 {
-    tiny_log("Hello, ARM Tiny VM [%s]!\n", VM_VERSION);
+    tiny_info("Hello, ARM Tiny VM [%s]!\n", VM_VERSION);
 
     system_shutdown();
     return 0;
