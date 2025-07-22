@@ -2,46 +2,47 @@
 #define _TINYIO_H
 #include "printf.h"
 
-typedef enum
-{
-    NONE,
-    INFO,
-    WARN,
-    DEBUG,
-    ERROR
-} LOG_LEVEL;
-
-#define set_color(level)        \
-    do                          \
-    {                           \
-        switch (level)          \
-        {                       \
-        case INFO:              \
-            printf("\033[32m"); \
-            break;              \
-        case WARN:              \
-            printf("\033[33m"); \
-            break;              \
-        case DEBUG:             \
-            printf("\033[34m"); \
-            break;              \
-        case ERROR:             \
-            printf("\033[31m"); \
-            break;              \
-        default:                \
-            printf("\033[0m");  \
-            break;              \
-        }                       \
-    } while (0)
-#define reset_color() printf("\033[0m")
-
-#define tiny_log(level, format, ...)            \
+#define tiny_log(format, ...)                   \
     do                                          \
     {                                           \
         printf("[%s:%d] ", __FILE__, __LINE__); \
-        set_color(level);                       \
         printf(format, ##__VA_ARGS__);          \
-        reset_color();                          \
+    } while (0)
+
+#define tiny_warn(format, ...)                  \
+    do                                          \
+    {                                           \
+        printf("[%s:%d] ", __FILE__, __LINE__); \
+        printf("\033[32m");                     \
+        printf(format, ##__VA_ARGS__);          \
+        printf("\033[0m")                       \
+    } while (0)
+
+#define tiny_info(format, ...)                  \
+    do                                          \
+    {                                           \
+        printf("[%s:%d] ", __FILE__, __LINE__); \
+        printf("\033[33m");                     \
+        printf(format, ##__VA_ARGS__);          \
+        printf("\033[0m")                       \
+    } while (0)
+
+#define tiny_debug(format, ...)                 \
+    do                                          \
+    {                                           \
+        printf("[%s:%d] ", __FILE__, __LINE__); \
+        printf("\033[34m");                     \
+        printf(format, ##__VA_ARGS__);          \
+        printf("\033[0m")                       \
+    } while (0)
+
+#define tiny_error(format, ...)                 \
+    do                                          \
+    {                                           \
+        printf("[%s:%d] ", __FILE__, __LINE__); \
+        printf("\033[31m");                     \
+        printf(format, ##__VA_ARGS__);          \
+        printf("\033[0m")                       \
     } while (0)
 
 #endif
