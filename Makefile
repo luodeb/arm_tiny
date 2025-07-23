@@ -15,7 +15,7 @@ ASM_DIR = asm
 OUTPUT_DIR = build
 
 # Source files
-C_SOURCES = $(wildcard $(SRC_DIR)/*.c)
+C_SOURCES = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/virtio/*.c)
 ASM_SOURCES = $(wildcard $(ASM_DIR)/*.S)
 
 # Object files
@@ -35,6 +35,7 @@ all: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(TARGET).bin
 
 $(OUTPUT_DIR):
 	mkdir -p $(OUTPUT_DIR)
+	mkdir -p $(OUTPUT_DIR)/virtio
 
 $(OUTPUT_DIR)/$(TARGET).bin: $(OUTPUT_DIR)/$(TARGET).elf
 	$(OBJCOPY) -O binary $< $@
@@ -55,8 +56,12 @@ debug:
 	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -s -S
 
 run:
-	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf
-
+	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 \
+	-nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf \
+	-device virtio-blk-device,drive=test \
+	-drive file=test.img,if=none,id=test,format=raw,cache=none \
+	-device virtio-net-device,netdev=net0 \
+	-netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555
 
 clean:
 	rm -rf $(OUTPUT_DIR)

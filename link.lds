@@ -33,6 +33,11 @@ SECTIONS
         *(.bss)
     }
 
+    . = ALIGN(64);
+    __virtio_start = .;
+    . += 0x1000000; /* 16MB VirtIO */
+    __virtio_end = .;
+
     /* 确保整个镜像结束时也是4K对齐 */
     . = ALIGN(4096);
 }
