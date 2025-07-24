@@ -57,9 +57,9 @@ static void print_hex_dump(const void *data, uint32_t size, const char *prefix)
 }
 
 // Scan for VirtIO devices and return the address of the first block device found
-static uint64_t scan_for_virtio_block_device(void)
+static uint64_t scan_for_virtio_block_device(uint32_t found_device_id)
 {
-    tiny_info("Scanning for VirtIO block devices...\n");
+    tiny_info("Scanning for VirtIO %d devices...\n", found_device_id);
 
     for (uint32_t i = 0; i < VIRTIO_SCAN_COUNT; i++)
     {
@@ -88,14 +88,14 @@ static uint64_t scan_for_virtio_block_device(void)
         tiny_info("Found VirtIO device at 0x%lx: ID=%u, Vendor=0x%x, Version=%u\n",
                   addr, device_id, vendor_id, version);
 
-        if (device_id == VIRTIO_ID_BLOCK)
+        if (device_id == found_device_id)
         {
-            tiny_info("Found VirtIO block device at address 0x%lx!\n", addr);
+            tiny_info("Found VirtIO %d device at address 0x%lx!\n", found_device_id, addr);
             return addr;
         }
     }
 
-    tiny_error("No VirtIO block device found in scan range\n");
+    tiny_error("No VirtIO %d device found in scan range\n", found_device_id);
     return 0;
 }
 
@@ -104,7 +104,7 @@ int virtio_block_test(void)
     tiny_info("Starting VirtIO Block device test\n");
 
     // Scan for VirtIO block device
-    uint64_t block_device_addr = scan_for_virtio_block_device();
+    uint64_t block_device_addr = scan_for_virtio_block_device(VIRTIO_ID_BLOCK);
     if (block_device_addr == 0)
     {
         tiny_error("Failed to find VirtIO block device\n");

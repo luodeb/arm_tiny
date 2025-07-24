@@ -13,6 +13,7 @@ INCLUDE_DIR = include
 SRC_DIR = src
 ASM_DIR = asm
 OUTPUT_DIR = build
+DISK_IMG := test.img
 
 # Source files
 C_SOURCES = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/virtio/*.c)
@@ -60,8 +61,14 @@ run:
 	-nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf \
 	-device virtio-blk-device,drive=test \
 	-drive file=test.img,if=none,id=test,format=raw,cache=none \
-	-device virtio-net-device,netdev=net0 \
-	-netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555
+	-device virtio-net-device,netdev=net0,mac=00:00:00:00:00:03 \
+	-netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555 \
+	-trace virtio_*
+
+disk_img:
+	@printf "    $(GREEN_C)Creating$(END_C) FAT32 disk image \"$(DISK_IMG)\" ...\n"
+	@dd if=/dev/zero of=$(DISK_IMG) bs=1M count=64
+	@mkfs.fat -F 32 $(DISK_IMG)
 
 clean:
 	rm -rf $(OUTPUT_DIR)

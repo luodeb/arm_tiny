@@ -12,7 +12,7 @@
 #define VM_VERSION "null"
 #endif
 
-// Forward declaration
+// Forward declarations
 int virtio_block_test(void);
 
 int kernel_main(void)
