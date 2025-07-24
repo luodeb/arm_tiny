@@ -13,9 +13,10 @@ INCLUDE_DIR = include
 SRC_DIR = src
 ASM_DIR = asm
 OUTPUT_DIR = build
+DISK_IMG := test.img
 
 # Source files
-C_SOURCES = $(wildcard $(SRC_DIR)/*.c)
+C_SOURCES = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/virtio/*.c)
 ASM_SOURCES = $(wildcard $(ASM_DIR)/*.S)
 
 # Object files
@@ -26,6 +27,15 @@ OBJECTS = $(C_OBJECTS) $(ASM_OBJECTS)
 # Output file
 TARGET = arm_tiny
 
+# QEMU 配置
+QEMU = qemu-system-aarch64
+QEMU_ARGS = -m 4G -M virt -cpu cortex-a72 \
+	-nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf \
+	-device virtio-blk-device,drive=test \
+	-drive file=test.img,if=none,id=test,format=raw,cache=none \
+	-device virtio-net-device,netdev=net0,mac=00:00:00:00:00:03 \
+	-netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555
+
 # Compiler flags
 CFLAGS = -Wall -I$(INCLUDE_DIR) -c -lc -g -O0 -fno-pie -fno-builtin-printf -mgeneral-regs-only -DVM_VERSION=\"$(if $(VM_VERSION),$(VM_VERSION),"null")\"
 LDFLAGS = -T link.lds
@@ -35,12 +45,12 @@ all: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(TARGET).bin
 
 $(OUTPUT_DIR):
 	mkdir -p $(OUTPUT_DIR)
+	mkdir -p $(OUTPUT_DIR)/virtio
 
 $(OUTPUT_DIR)/$(TARGET).bin: $(OUTPUT_DIR)/$(TARGET).elf
 	$(OBJCOPY) -O binary $< $@
 	$(TOOL_PREFIX)objdump -x -d -S $(OUTPUT_DIR)/$(TARGET).elf > $(OUTPUT_DIR)/$(TARGET)_dis.txt
 	$(TOOL_PREFIX)readelf -a $(OUTPUT_DIR)/$(TARGET).elf  > $(OUTPUT_DIR)/$(TARGET)_elf.txt
-
 
 $(OUTPUT_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -o $@ $<
@@ -51,12 +61,21 @@ $(OUTPUT_DIR)/%.o: $(ASM_DIR)/%.S
 $(OUTPUT_DIR)/$(TARGET).elf: $(OBJECTS)
 	$(LD) $(LDFLAGS) -o $@ $^
 
-debug:
-	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf -s -S
+debug: all
+	@echo "Starting $(TARGET) in QEMU..."
+	@echo "Press Ctrl+A then X to exit QEMU"
+	$(QEMU) $(QEMU_ARGS) -s -S
 
-run:
-	qemu-system-aarch64 -m 4G -M virt -cpu cortex-a72 -nographic -kernel $(OUTPUT_DIR)/$(TARGET).elf
+run: all
+	@echo "Starting $(TARGET) in QEMU with GDB support..."
+	@echo "Connect with: gdb-multiarch -ex 'target remote :1234' $(TARGET).elf"
+	@echo "Press Ctrl+A then X to exit QEMU"
+	$(QEMU) $(QEMU_ARGS)
 
+disk_img:
+	@printf "    $(GREEN_C)Creating$(END_C) FAT32 disk image \"$(DISK_IMG)\" ...\n"
+	@dd if=/dev/zero of=$(DISK_IMG) bs=1M count=64
+	@mkfs.fat -F 32 $(DISK_IMG)
 
 clean:
 	rm -rf $(OUTPUT_DIR)
