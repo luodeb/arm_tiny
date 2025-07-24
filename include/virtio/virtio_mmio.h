@@ -138,6 +138,10 @@ int virtio_queue_kick(virtio_device_t *dev, uint32_t queue_id);
 int virtio_queue_get_buf(virtio_device_t *dev, uint32_t queue_id, uint32_t *len);
 void virtio_set_status(virtio_device_t *dev, uint8_t status);
 uint8_t virtio_get_status(virtio_device_t *dev);
+uint8_t virtio_read8(virtio_device_t *dev, uint32_t offset);
+void virtio_write8(virtio_device_t *dev, uint32_t offset, uint8_t value);
+uint16_t virtio_read16(virtio_device_t *dev, uint32_t offset);
+void virtio_write16(virtio_device_t *dev, uint32_t offset, uint16_t value);
 uint32_t virtio_read32(virtio_device_t *dev, uint32_t offset);
 void virtio_write32(virtio_device_t *dev, uint32_t offset, uint32_t value);
 

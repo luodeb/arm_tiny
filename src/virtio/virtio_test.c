@@ -1,6 +1,7 @@
 #include "virtio/virtio_block.h"
 #include "tinystd.h"
 #include "tinyio.h"
+#include <virtio/virtio_net.h>
 
 // VirtIO device scanning parameters
 #define VIRTIO_SCAN_BASE_ADDR 0xa000000 // Start scanning from 0xa00_0000
@@ -156,4 +157,75 @@ int virtio_block_test(void)
     virtio_allocator_info();
 
     return 0;
+}
+
+int virtio_net_basic_test(void)
+{
+    tiny_info("Starting VirtIO Net basic test\n");
+
+    // Scan for VirtIO net device
+    uint64_t net_device_addr = scan_for_virtio_block_device(VIRTIO_ID_NET);
+    if (net_device_addr == 0)
+    {
+        tiny_error("Failed to find VirtIO Net device\n");
+        return -1;
+    }
+
+    // Initialize net device
+    virtio_net_device_t net_dev;
+
+    if (virtio_net_init(&net_dev, net_device_addr, 1) < 0)
+    { // Device index 1
+        tiny_error("Failed to initialize VirtIO Net device\n");
+        return -1;
+    }
+
+    // Print device information
+    tiny_info("VirtIO Net device initialized successfully\n");
+    virtio_net_print_mac(net_dev.mac_addr);
+    tiny_info("Link status: %s\n", virtio_net_is_link_up(&net_dev) ? "UP" : "DOWN");
+    tiny_info("MTU: %d\n", net_dev.mtu);
+
+    // Print initial statistics
+    virtio_net_print_stats(&net_dev);
+
+    tiny_info("VirtIO Net basic test completed successfully\n");
+    return 0;
+}
+
+void virtio_test_all(void)
+{
+    // Test VirtIO block device
+    if (virtio_block_test() < 0)
+    {
+        tiny_error("VirtIO block test failed\n");
+    }
+
+    // Test VirtIO network device
+    tiny_info("\n=== VirtIO Network Tests ===\n");
+
+    if (virtio_net_basic_test() < 0)
+    {
+        tiny_error("VirtIO Net basic test failed\n");
+    }
+
+    // if (virtio_net_send_test() < 0)
+    // {
+    //     tiny_error("VirtIO Net send test failed\n");
+    // }
+
+    // if (virtio_net_receive_test() < 0)
+    // {
+    //     tiny_error("VirtIO Net receive test failed\n");
+    // }
+
+    // if (virtio_net_loopback_test() < 0)
+    // {
+    //     tiny_error("VirtIO Net loopback test failed\n");
+    // }
+
+    // if (virtio_net_layered_send_test() < 0)
+    // {
+    //     tiny_error("VirtIO Net layered send test failed\n");
+    // }
 }

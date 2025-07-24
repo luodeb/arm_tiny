@@ -13,17 +13,13 @@
 #endif
 
 // Forward declarations
-int virtio_block_test(void);
+void virtio_test_all(void);
 
 int kernel_main(void)
 {
     tiny_info("Hello, ARM Tiny VM [%s]!\n", VM_VERSION);
 
-    // Test VirtIO block device
-    if (virtio_block_test() < 0)
-    {
-        tiny_error("VirtIO block test failed\n");
-    }
+    virtio_test_all();
 
     system_shutdown();
     return 0;

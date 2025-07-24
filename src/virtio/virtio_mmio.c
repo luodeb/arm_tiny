@@ -18,6 +18,32 @@ static inline void wmb(void)
     __asm__ volatile("dsb st" ::: "memory");
 }
 
+uint8_t virtio_read8(virtio_device_t *dev, uint32_t offset)
+{
+    uint8_t value = read8((volatile void *)(dev->base_addr + offset));
+    rmb();
+    return value;
+}
+
+void virtio_write8(virtio_device_t *dev, uint32_t offset, uint8_t value)
+{
+    wmb();
+    write8(value, (volatile void *)(dev->base_addr + offset));
+}
+
+uint16_t virtio_read16(virtio_device_t *dev, uint32_t offset)
+{
+    uint16_t value = read16((volatile void *)(dev->base_addr + offset));
+    rmb();
+    return value;
+}
+
+void virtio_write16(virtio_device_t *dev, uint32_t offset, uint16_t value)
+{
+    wmb();
+    write16(value, (volatile void *)(dev->base_addr + offset));
+}
+
 uint32_t virtio_read32(virtio_device_t *dev, uint32_t offset)
 {
     uint32_t value = read32((volatile void *)(dev->base_addr + offset));
